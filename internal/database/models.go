@@ -6,10 +6,169 @@ package database
 
 import (
 	"database/sql"
+	"database/sql/driver"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
+
+type DebtType string
+
+const (
+	DebtTypeCreditCard   DebtType = "credit_card"
+	DebtTypePersonalLoan DebtType = "personal_loan"
+	DebtTypeStudentLoan  DebtType = "student_loan"
+	DebtTypeMortgage     DebtType = "mortgage"
+	DebtTypeMedical      DebtType = "medical"
+	DebtTypeOther        DebtType = "other"
+)
+
+func (e *DebtType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DebtType(s)
+	case string:
+		*e = DebtType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DebtType: %T", src)
+	}
+	return nil
+}
+
+type NullDebtType struct {
+	DebtType DebtType
+	Valid    bool // Valid is true if DebtType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDebtType) Scan(value interface{}) error {
+	if value == nil {
+		ns.DebtType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DebtType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDebtType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DebtType), nil
+}
+
+type PaymentFreq string
+
+const (
+	PaymentFreqMonthly  PaymentFreq = "monthly"
+	PaymentFreqBiweekly PaymentFreq = "biweekly"
+	PaymentFreqWeekly   PaymentFreq = "weekly"
+)
+
+func (e *PaymentFreq) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentFreq(s)
+	case string:
+		*e = PaymentFreq(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentFreq: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentFreq struct {
+	PaymentFreq PaymentFreq
+	Valid       bool // Valid is true if PaymentFreq is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentFreq) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentFreq, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentFreq.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentFreq) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentFreq), nil
+}
+
+type RiskLevel string
+
+const (
+	RiskLevelLow    RiskLevel = "low"
+	RiskLevelMedium RiskLevel = "medium"
+	RiskLevelHigh   RiskLevel = "high"
+)
+
+func (e *RiskLevel) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RiskLevel(s)
+	case string:
+		*e = RiskLevel(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RiskLevel: %T", src)
+	}
+	return nil
+}
+
+type NullRiskLevel struct {
+	RiskLevel RiskLevel
+	Valid     bool // Valid is true if RiskLevel is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRiskLevel) Scan(value interface{}) error {
+	if value == nil {
+		ns.RiskLevel, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RiskLevel.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRiskLevel) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RiskLevel), nil
+}
+
+type Debt struct {
+	ID                 uuid.UUID
+	UserID             uuid.UUID
+	Name               string
+	Type               DebtType
+	Lender             sql.NullString
+	PrincipalDecimal   decimal.Decimal
+	OutstandingBalance decimal.Decimal
+	InterestRate       decimal.Decimal
+	MinPayment         decimal.Decimal
+	DueDate            time.Time
+	PaymentFrequency   NullPaymentFreq
+	IsOverdue          sql.NullBool
+	LateFees           sql.NullString
+	OtherCharges       sql.NullString
+	DebtTaken          sql.NullTime
+	RiskLevel          NullRiskLevel
+	DebtHealthScore    sql.NullString
+	Priority           sql.NullInt16
+	Notes              sql.NullString
+	CreatedAt          sql.NullTime
+	UpdatedAt          sql.NullTime
+}
 
 type RefreshToken struct {
 	Token     string
@@ -25,7 +184,7 @@ type User struct {
 	Name          string
 	Email         string
 	PasswordHash  string
-	MonthlyIncome string
+	MonthlyIncome decimal.Decimal
 	IsActive      sql.NullBool
 	CreatedAt     time.Time
 	UpdatedAt     time.Time

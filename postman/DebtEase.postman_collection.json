@@ -1,0 +1,213 @@
+{
+  "info": {
+    "name": "DebtEase API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "debt-ease-collection"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/login", "host": ["{{baseUrl}}"], "path": ["api", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.token) { pm.environment.set('accessToken', res.token); }",
+                  "if (res && res.id) { pm.environment.set('userId', res.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Debts",
+      "item": [
+        {
+          "name": "Create Debt",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts", "host": ["{{baseUrl}}"], "path": ["api", "debts"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Visa Card\",\n  \"type\": \"credit_card\",\n  \"lender\": \"Visa\",\n  \"principal\": \"2500.00\",\n  \"outstanding_balance\": \"1900.55\",\n  \"interest_rate\": \"0.1999\",\n  \"min_payment\": \"40.00\",\n  \"due_date\": \"2025-12-01T00:00:00Z\",\n  \"payment_frequency\": \"monthly\",\n  \"debt_taken\": \"2024-05-01T00:00:00Z\",\n  \"risk_level\": \"medium\",\n  \"priority\": 5,\n  \"notes\": \"Promo APR\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "try {",
+                  "  const d = pm.response.json();",
+                  "  if (d && d.id) pm.environment.set('debtId', d.id);",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Debts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts", "host": ["{{baseUrl}}"], "path": ["api", "debts"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Debt",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts/{{debtId}}", "host": ["{{baseUrl}}"], "path": ["api", "debts", "{{debtId}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Balance",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts/{{debtId}}/balance", "host": ["{{baseUrl}}"], "path": ["api", "debts", "{{debtId}}", "balance"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"outstanding_balance\": \"1850.25\",\n  \"is_overdue\": false\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Health",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts/{{debtId}}/health", "host": ["{{baseUrl}}"], "path": ["api", "debts", "{{debtId}}", "health"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"debt_health_score\": \"72.50\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Overdue",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts/{{debtId}}/overdue", "host": ["{{baseUrl}}"], "path": ["api", "debts", "{{debtId}}", "overdue"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/register", "host": ["{{baseUrl}}"], "path": ["api", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"Test User\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"you+updated@example.com\",\n  \"password\": \"newPassword123\",\n  \"monthly_income\": \"5000.00\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const token = pm.environment.get('accessToken');",
+          "if (!token) {",
+          "  pm.sendRequest({",
+          "    url: pm.environment.get('baseUrl') + '/api/login',",
+          "    method: 'POST',",
+          "    header: { 'Content-Type': 'application/json' },",
+          "    body: { mode: 'raw', raw: JSON.stringify({ email: pm.environment.get('email'), password: pm.environment.get('password') }) }",
+          "  }, (err, res) => {",
+          "    if (!err && res && res.code === 200) {",
+          "      const body = res.json();",
+          "      if (body && body.token) pm.environment.set('accessToken', body.token);",
+          "      if (body && body.id) pm.environment.set('userId', body.id);",
+          "    }",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "email", "value": "you@example.com" },
+    { "key": "password", "value": "yourPassword" },
+    { "key": "accessToken", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "debtId", "value": "" }
+  ]
+}
+
+

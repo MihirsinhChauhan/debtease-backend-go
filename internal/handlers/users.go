@@ -125,30 +125,60 @@ func HandleUpdateUser(cfg *api.Config) http.HandlerFunc {
 			return
 		}
 
-		// === 3. Validate fields ===
-		if req.Email == "" {
-			utils.RespondWithError(w, http.StatusBadRequest, "Email is required")
+		// === 3. Validate provided fields (partial allowed) ===
+		if req.Name == nil && req.Email == nil && req.Password == nil && req.MonthlyIncome == nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "Provide at least one field to update")
 			return
 		}
-		if req.Password == "" {
-			utils.RespondWithError(w, http.StatusBadRequest, "Password is required")
+		if req.Email != nil && strings.TrimSpace(*req.Email) == "" {
+			utils.RespondWithError(w, http.StatusBadRequest, "Email cannot be empty")
+			return
+		}
+		if req.Password != nil && strings.TrimSpace(*req.Password) == "" {
+			utils.RespondWithError(w, http.StatusBadRequest, "Password cannot be empty")
 			return
 		}
 
-		// === 4. Hash new password ===
-		hashedPassword, err := auth.HashPassword(req.Password)
+		// === 4. Load current user (for partial updates) ===
+		ctx := context.Background()
+		existing, err := cfg.DB.GetUserByID(ctx, userID)
 		if err != nil {
-			logger.Logger.Errorw("Failed to hash password", "error", err)
+			logger.Logger.Errorw("Failed to load existing user for update", "error", err, "user_id", userID)
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update user")
 			return
 		}
 
-		// === 5. Update user in DB ===
-		ctx := context.Background()
+		// === 5. Prepare updated fields ===
+		finalName := existing.Name
+		if req.Name != nil {
+			finalName = strings.TrimSpace(*req.Name)
+		}
+		finalEmail := existing.Email
+		if req.Email != nil {
+			finalEmail = strings.TrimSpace(*req.Email)
+		}
+		finalPasswordHash := existing.PasswordHash
+		if req.Password != nil {
+			hashedPassword, hashErr := auth.HashPassword(*req.Password)
+			if hashErr != nil {
+				logger.Logger.Errorw("Failed to hash password", "error", hashErr)
+				utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update user")
+				return
+			}
+			finalPasswordHash = hashedPassword
+		}
+		finalMonthlyIncome := existing.MonthlyIncome
+		if req.MonthlyIncome != nil {
+			finalMonthlyIncome = *req.MonthlyIncome
+		}
+
+		// === 6. Update user in DB ===
 		updatedUser, err := cfg.DB.UpdateUser(ctx, database.UpdateUserParams{
-			ID:           userID,
-			Email:        req.Email,
-			PasswordHash: hashedPassword,
+			ID:            userID,
+			Name:          finalName,
+			Email:         finalEmail,
+			PasswordHash:  finalPasswordHash,
+			MonthlyIncome: finalMonthlyIncome,
 		})
 		if err != nil {
 			logger.Logger.Errorw("Failed to update user in database",
@@ -158,7 +188,8 @@ func HandleUpdateUser(cfg *api.Config) http.HandlerFunc {
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update user")
 			return
 		}
-		// === 6. Build response (omit password) ===
+
+		// === 7. Build response (omit password) ===
 		resp := models.UpdateUserResponse{
 			ID:            updatedUser.ID,
 			Name:          updatedUser.Name,
@@ -168,7 +199,7 @@ func HandleUpdateUser(cfg *api.Config) http.HandlerFunc {
 			UpdatedAt:     updatedUser.UpdatedAt.Format(time.RFC3339),
 		}
 
-		// === 7. Log success ===
+		// === 8. Log success ===
 		logger.Logger.Infow("User updated successfully",
 			"user_id", updatedUser.ID,
 			"new_email", updatedUser.Email,

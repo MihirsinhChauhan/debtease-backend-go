@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 const createUser = `-- name: CreateUser :one
@@ -88,7 +89,7 @@ type UpdateUserParams struct {
 	Name          string
 	Email         string
 	PasswordHash  string
-	MonthlyIncome string
+	MonthlyIncome decimal.Decimal
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {

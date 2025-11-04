@@ -75,6 +75,37 @@ func main() {
 	mux.HandleFunc("POST /api/register", handlers.HandleCreateUser(cfg))
 	mux.HandleFunc("PUT /api/users", handlers.HandleUpdateUser(cfg))
 
+	// debts (authenticated)
+	{
+		// POST /api/debts
+		createDebt := handlers.HandleCreateDebt(cfg)
+		mux.Handle("POST /api/debts", middleware.Logging(middleware.AuthRequired(cfg, createDebt)))
+
+		// GET /api/debts
+		listDebts := handlers.HandleListDebts(cfg)
+		mux.Handle("GET /api/debts", middleware.Logging(middleware.AuthRequired(cfg, listDebts)))
+
+		// GET /api/debts/{id}
+		getDebt := handlers.HandleGetDebt(cfg)
+		mux.Handle("GET /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, getDebt)))
+
+		// PATCH /api/debts/{id}/balance
+		updateBalance := handlers.HandleUpdateDebtBalance(cfg)
+		mux.Handle("PATCH /api/debts/{id}/balance", middleware.Logging(middleware.AuthRequired(cfg, updateBalance)))
+
+		// PATCH /api/debts/{id}/health
+		updateHealth := handlers.HandleUpdateDebtHealth(cfg)
+		mux.Handle("PATCH /api/debts/{id}/health", middleware.Logging(middleware.AuthRequired(cfg, updateHealth)))
+
+		// POST /api/debts/{id}/overdue
+		markOverdue := handlers.HandleMarkDebtOverdue(cfg)
+		mux.Handle("POST /api/debts/{id}/overdue", middleware.Logging(middleware.AuthRequired(cfg, markOverdue)))
+
+		// // DELETE /api/debts/{id}
+		// deleteDebt := handlers.HandleDeleteDebt(cfg)
+		// mux.Handle("DELETE /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, deleteDebt)))
+	}
+
 	// Start server
 	logger.Logger.Infow("Server starting", "port", 8080, "platform", platform)
 	logger.Logger.Fatal(http.ListenAndServe(":8080", mux))
