@@ -7,7 +7,7 @@ CREATE TABLE users (
     name          VARCHAR(255) NOT NULL,
     email         VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    monthly_income DECIMAL(12,2) NOT NULL,
+    monthly_income DECIMAL(12,2) NOT NULL DEFAULT 0,
     is_active     BOOLEAN DEFAULT TRUE,
     created_at    TIMESTAMPTZ DEFAULT now() NOT NULL,
     updated_at    TIMESTAMPTZ DEFAULT now() NOT NULL
