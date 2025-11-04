@@ -14,6 +14,25 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const accrueInterest = `-- name: AccrueInterest :exec
+UPDATE debts
+SET accrued_interest = accrued_interest + $2,
+    last_accrual_date = $3,
+    updated_at = now()
+WHERE id = $1
+`
+
+type AccrueInterestParams struct {
+	ID              uuid.UUID
+	AccruedInterest decimal.Decimal
+	LastAccrualDate time.Time
+}
+
+func (q *Queries) AccrueInterest(ctx context.Context, arg AccrueInterestParams) error {
+	_, err := q.db.ExecContext(ctx, accrueInterest, arg.ID, arg.AccruedInterest, arg.LastAccrualDate)
+	return err
+}
+
 const createDebt = `-- name: CreateDebt :one
 INSERT INTO debts (
   user_id, name, type, lender, principal_decimal,
@@ -23,7 +42,7 @@ INSERT INTO debts (
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 )
-RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at
+RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
 `
 
 type CreateDebtParams struct {
@@ -83,12 +102,14 @@ func (q *Queries) CreateDebt(ctx context.Context, arg CreateDebtParams) (Debt, e
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AccruedInterest,
+		&i.LastAccrualDate,
 	)
 	return i, err
 }
 
 const getDebtByID = `-- name: GetDebtByID :one
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
 FROM debts
 WHERE id = $1 AND user_id = $2
 `
@@ -123,12 +144,110 @@ func (q *Queries) GetDebtByID(ctx context.Context, arg GetDebtByIDParams) (Debt,
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AccruedInterest,
+		&i.LastAccrualDate,
 	)
 	return i, err
 }
 
+const getDebtForUpdate = `-- name: GetDebtForUpdate :one
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+FROM debts
+WHERE id = $1 AND user_id = $2
+FOR UPDATE
+`
+
+type GetDebtForUpdateParams struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+}
+
+func (q *Queries) GetDebtForUpdate(ctx context.Context, arg GetDebtForUpdateParams) (Debt, error) {
+	row := q.db.QueryRowContext(ctx, getDebtForUpdate, arg.ID, arg.UserID)
+	var i Debt
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Type,
+		&i.Lender,
+		&i.PrincipalDecimal,
+		&i.OutstandingBalance,
+		&i.InterestRate,
+		&i.MinPayment,
+		&i.DueDate,
+		&i.PaymentFrequency,
+		&i.IsOverdue,
+		&i.LateFees,
+		&i.OtherCharges,
+		&i.DebtTaken,
+		&i.RiskLevel,
+		&i.DebtHealthScore,
+		&i.Priority,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AccruedInterest,
+		&i.LastAccrualDate,
+	)
+	return i, err
+}
+
+const listAllActiveDebts = `-- name: ListAllActiveDebts :many
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+FROM debts
+WHERE outstanding_balance > 0 OR accrued_interest > 0
+`
+
+func (q *Queries) ListAllActiveDebts(ctx context.Context) ([]Debt, error) {
+	rows, err := q.db.QueryContext(ctx, listAllActiveDebts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Debt
+	for rows.Next() {
+		var i Debt
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.Type,
+			&i.Lender,
+			&i.PrincipalDecimal,
+			&i.OutstandingBalance,
+			&i.InterestRate,
+			&i.MinPayment,
+			&i.DueDate,
+			&i.PaymentFrequency,
+			&i.IsOverdue,
+			&i.LateFees,
+			&i.OtherCharges,
+			&i.DebtTaken,
+			&i.RiskLevel,
+			&i.DebtHealthScore,
+			&i.Priority,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AccruedInterest,
+			&i.LastAccrualDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserDebts = `-- name: ListUserDebts :many
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
 FROM debts
 WHERE user_id = $1
 ORDER BY priority DESC, due_date ASC
@@ -165,6 +284,8 @@ func (q *Queries) ListUserDebts(ctx context.Context, userID uuid.UUID) ([]Debt, 
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AccruedInterest,
+			&i.LastAccrualDate,
 		); err != nil {
 			return nil, err
 		}
@@ -187,6 +308,44 @@ WHERE id = $1
 
 func (q *Queries) MarkDebtOverdue(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, markDebtOverdue, id)
+	return err
+}
+
+const resetAccruedInterest = `-- name: ResetAccruedInterest :exec
+UPDATE debts
+SET accrued_interest = 0,
+    updated_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) ResetAccruedInterest(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, resetAccruedInterest, id)
+	return err
+}
+
+const updateDebtAfterPayment = `-- name: UpdateDebtAfterPayment :exec
+UPDATE debts
+SET outstanding_balance = $2,
+    accrued_interest = $3,
+    last_accrual_date = $4,
+    updated_at = now()
+WHERE id = $1
+`
+
+type UpdateDebtAfterPaymentParams struct {
+	ID                 uuid.UUID
+	OutstandingBalance decimal.Decimal
+	AccruedInterest    decimal.Decimal
+	LastAccrualDate    time.Time
+}
+
+func (q *Queries) UpdateDebtAfterPayment(ctx context.Context, arg UpdateDebtAfterPaymentParams) error {
+	_, err := q.db.ExecContext(ctx, updateDebtAfterPayment,
+		arg.ID,
+		arg.OutstandingBalance,
+		arg.AccruedInterest,
+		arg.LastAccrualDate,
+	)
 	return err
 }
 

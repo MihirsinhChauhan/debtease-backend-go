@@ -139,6 +139,70 @@
       ]
     },
     {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Record Payment - Minimum",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts/{{debtId}}/payments", "host": ["{{baseUrl}}"], "path": ["api", "debts", "{{debtId}}", "payments"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_date\": \"2025-11-15T00:00:00Z\",\n  \"type\": \"minimum\",\n  \"notes\": \"Monthly minimum payment\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Record Payment - Full",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts/{{debtId}}/payments", "host": ["{{baseUrl}}"], "path": ["api", "debts", "{{debtId}}", "payments"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_date\": \"2025-11-15T00:00:00Z\",\n  \"type\": \"full\",\n  \"payment_method\": \"bank_transfer\",\n  \"notes\": \"Paid off in full\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Record Payment - Extra",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts/{{debtId}}/payments", "host": ["{{baseUrl}}"], "path": ["api", "debts", "{{debtId}}", "payments"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_date\": \"2025-11-15T00:00:00Z\",\n  \"type\": \"extra\",\n  \"amount\": \"100.00\",\n  \"payment_method\": \"credit_card\",\n  \"notes\": \"Extra payment to reduce principal\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/debts/{{debtId}}/payments", "host": ["{{baseUrl}}"], "path": ["api", "debts", "{{debtId}}", "payments"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Users",
       "item": [
         {

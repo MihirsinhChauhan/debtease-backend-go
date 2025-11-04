@@ -6,9 +6,12 @@ import (
 	"DebtEase/internal/handlers"
 	"DebtEase/internal/logger"
 	"DebtEase/internal/middleware"
+	"DebtEase/internal/worker"
+	"context"
 	"database/sql"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -101,10 +104,19 @@ func main() {
 		markOverdue := handlers.HandleMarkDebtOverdue(cfg)
 		mux.Handle("POST /api/debts/{id}/overdue", middleware.Logging(middleware.AuthRequired(cfg, markOverdue)))
 
+		// payments
+		recordPayment := handlers.HandleRecordPayment(cfg, db)
+		mux.Handle("POST /api/debts/{id}/payments", middleware.Logging(middleware.AuthRequired(cfg, recordPayment)))
+		listPayments := handlers.HandleListPayments(cfg)
+		mux.Handle("GET /api/debts/{id}/payments", middleware.Logging(middleware.AuthRequired(cfg, listPayments)))
+
 		// // DELETE /api/debts/{id}
 		// deleteDebt := handlers.HandleDeleteDebt(cfg)
 		// mux.Handle("DELETE /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, deleteDebt)))
 	}
+
+	// Start worker (daily accrual)
+	worker.StartDailyAccrual(context.Background(), dbQueries, 24*time.Hour)
 
 	// Start server
 	logger.Logger.Infow("Server starting", "port", 8080, "platform", platform)

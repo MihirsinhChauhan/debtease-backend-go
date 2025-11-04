@@ -7,16 +7,16 @@ INSERT INTO debts (
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 )
-RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at;
+RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date;
 
 -- name: ListUserDebts :many
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at
+SELECT *
 FROM debts
 WHERE user_id = $1
 ORDER BY priority DESC, due_date ASC;
 
 -- name: GetDebtByID :one
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at
+SELECT *
 FROM debts
 WHERE id = $1 AND user_id = $2;
 
@@ -36,3 +36,35 @@ WHERE id = $1;
 UPDATE debts
 SET is_overdue = TRUE, updated_at = now()
 WHERE id = $1;
+
+-- name: AccrueInterest :exec
+UPDATE debts
+SET accrued_interest = accrued_interest + $2,
+    last_accrual_date = $3,
+    updated_at = now()
+WHERE id = $1;
+
+-- name: ResetAccruedInterest :exec
+UPDATE debts
+SET accrued_interest = 0,
+    updated_at = now()
+WHERE id = $1;
+
+-- name: GetDebtForUpdate :one
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+FROM debts
+WHERE id = $1 AND user_id = $2
+FOR UPDATE;
+
+-- name: UpdateDebtAfterPayment :exec
+UPDATE debts
+SET outstanding_balance = $2,
+    accrued_interest = $3,
+    last_accrual_date = $4,
+    updated_at = now()
+WHERE id = $1;
+
+-- name: ListAllActiveDebts :many
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+FROM debts
+WHERE outstanding_balance > 0 OR accrued_interest > 0;

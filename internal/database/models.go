@@ -103,6 +103,50 @@ func (ns NullPaymentFreq) Value() (driver.Value, error) {
 	return string(ns.PaymentFreq), nil
 }
 
+type PaymentType string
+
+const (
+	PaymentTypeMinimum PaymentType = "minimum"
+	PaymentTypeExtra   PaymentType = "extra"
+	PaymentTypeFull    PaymentType = "full"
+	PaymentTypeLate    PaymentType = "late"
+)
+
+func (e *PaymentType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentType(s)
+	case string:
+		*e = PaymentType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentType: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentType struct {
+	PaymentType PaymentType
+	Valid       bool // Valid is true if PaymentType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentType) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentType), nil
+}
+
 type RiskLevel string
 
 const (
@@ -168,6 +212,21 @@ type Debt struct {
 	Notes              sql.NullString
 	CreatedAt          sql.NullTime
 	UpdatedAt          sql.NullTime
+	AccruedInterest    decimal.Decimal
+	LastAccrualDate    time.Time
+}
+
+type PaymentsHistory struct {
+	ID               uuid.UUID
+	DebtID           uuid.UUID
+	Amount           decimal.Decimal
+	PaymentDate      time.Time
+	Type             PaymentType
+	Notes            sql.NullString
+	PrincipalApplied decimal.Decimal
+	InterestApplied  decimal.Decimal
+	PaymentMethod    sql.NullString
+	CreatedAt        sql.NullTime
 }
 
 type RefreshToken struct {
