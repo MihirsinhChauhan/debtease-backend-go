@@ -190,6 +190,20 @@ func (ns NullRiskLevel) Value() (driver.Value, error) {
 	return string(ns.RiskLevel), nil
 }
 
+type CreditCard struct {
+	DebtID            uuid.UUID
+	BillingDay        int32
+	GracePeriodDays   int32
+	MinPaymentPercent decimal.Decimal
+	LastStatementDate sql.NullTime
+	PaymentDueDate    sql.NullTime
+	BilledBalance     decimal.Decimal
+	UnbilledBalance   decimal.Decimal
+	InGracePeriod     bool
+	CreatedAt         sql.NullTime
+	UpdatedAt         sql.NullTime
+}
+
 type Debt struct {
 	ID                 uuid.UUID
 	UserID             uuid.UUID
@@ -214,6 +228,12 @@ type Debt struct {
 	UpdatedAt          sql.NullTime
 	AccruedInterest    decimal.Decimal
 	LastAccrualDate    time.Time
+	PaymentDueDay      sql.NullInt32
+	EmiAmount          sql.NullString
+	TenureMonths       sql.NullInt32
+	MonthsPaid         sql.NullInt32
+	MoratoriumUntil    sql.NullTime
+	InMoratorium       sql.NullBool
 }
 
 type PaymentsHistory struct {

@@ -38,11 +38,13 @@ INSERT INTO debts (
   user_id, name, type, lender, principal_decimal,
   outstanding_balance, interest_rate, min_payment,
   due_date, payment_frequency, debt_taken,
-  risk_level, priority, notes
+  risk_level, priority, notes,
+  payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+  $15, $16, $17, $18, $19, $20
 )
-RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
 `
 
 type CreateDebtParams struct {
@@ -60,6 +62,12 @@ type CreateDebtParams struct {
 	RiskLevel          NullRiskLevel
 	Priority           sql.NullInt16
 	Notes              sql.NullString
+	PaymentDueDay      sql.NullInt32
+	EmiAmount          sql.NullString
+	TenureMonths       sql.NullInt32
+	MonthsPaid         sql.NullInt32
+	MoratoriumUntil    sql.NullTime
+	InMoratorium       sql.NullBool
 }
 
 func (q *Queries) CreateDebt(ctx context.Context, arg CreateDebtParams) (Debt, error) {
@@ -78,6 +86,12 @@ func (q *Queries) CreateDebt(ctx context.Context, arg CreateDebtParams) (Debt, e
 		arg.RiskLevel,
 		arg.Priority,
 		arg.Notes,
+		arg.PaymentDueDay,
+		arg.EmiAmount,
+		arg.TenureMonths,
+		arg.MonthsPaid,
+		arg.MoratoriumUntil,
+		arg.InMoratorium,
 	)
 	var i Debt
 	err := row.Scan(
@@ -104,12 +118,36 @@ func (q *Queries) CreateDebt(ctx context.Context, arg CreateDebtParams) (Debt, e
 		&i.UpdatedAt,
 		&i.AccruedInterest,
 		&i.LastAccrualDate,
+		&i.PaymentDueDay,
+		&i.EmiAmount,
+		&i.TenureMonths,
+		&i.MonthsPaid,
+		&i.MoratoriumUntil,
+		&i.InMoratorium,
 	)
 	return i, err
 }
 
+const exitMoratorium = `-- name: ExitMoratorium :exec
+UPDATE debts
+SET in_moratorium = FALSE,
+	emi_amount = $2,
+	updated_at = now()
+WHERE id = $1
+`
+
+type ExitMoratoriumParams struct {
+	ID        uuid.UUID
+	EmiAmount sql.NullString
+}
+
+func (q *Queries) ExitMoratorium(ctx context.Context, arg ExitMoratoriumParams) error {
+	_, err := q.db.ExecContext(ctx, exitMoratorium, arg.ID, arg.EmiAmount)
+	return err
+}
+
 const getDebtByID = `-- name: GetDebtByID :one
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
 FROM debts
 WHERE id = $1 AND user_id = $2
 `
@@ -146,12 +184,18 @@ func (q *Queries) GetDebtByID(ctx context.Context, arg GetDebtByIDParams) (Debt,
 		&i.UpdatedAt,
 		&i.AccruedInterest,
 		&i.LastAccrualDate,
+		&i.PaymentDueDay,
+		&i.EmiAmount,
+		&i.TenureMonths,
+		&i.MonthsPaid,
+		&i.MoratoriumUntil,
+		&i.InMoratorium,
 	)
 	return i, err
 }
 
 const getDebtForUpdate = `-- name: GetDebtForUpdate :one
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
 FROM debts
 WHERE id = $1 AND user_id = $2
 FOR UPDATE
@@ -189,12 +233,18 @@ func (q *Queries) GetDebtForUpdate(ctx context.Context, arg GetDebtForUpdatePara
 		&i.UpdatedAt,
 		&i.AccruedInterest,
 		&i.LastAccrualDate,
+		&i.PaymentDueDay,
+		&i.EmiAmount,
+		&i.TenureMonths,
+		&i.MonthsPaid,
+		&i.MoratoriumUntil,
+		&i.InMoratorium,
 	)
 	return i, err
 }
 
 const listAllActiveDebts = `-- name: ListAllActiveDebts :many
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
 FROM debts
 WHERE outstanding_balance > 0 OR accrued_interest > 0
 `
@@ -232,6 +282,74 @@ func (q *Queries) ListAllActiveDebts(ctx context.Context) ([]Debt, error) {
 			&i.UpdatedAt,
 			&i.AccruedInterest,
 			&i.LastAccrualDate,
+			&i.PaymentDueDay,
+			&i.EmiAmount,
+			&i.TenureMonths,
+			&i.MonthsPaid,
+			&i.MoratoriumUntil,
+			&i.InMoratorium,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLoansNeedingEMI = `-- name: ListLoansNeedingEMI :many
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
+FROM debts
+WHERE type IN ('personal_loan', 'student_loan', 'mortgage')
+	AND payment_due_day IS NOT NULL
+	AND outstanding_balance > 0
+	AND EXTRACT(DAY FROM CURRENT_DATE) = payment_due_day
+`
+
+func (q *Queries) ListLoansNeedingEMI(ctx context.Context) ([]Debt, error) {
+	rows, err := q.db.QueryContext(ctx, listLoansNeedingEMI)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Debt
+	for rows.Next() {
+		var i Debt
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.Type,
+			&i.Lender,
+			&i.PrincipalDecimal,
+			&i.OutstandingBalance,
+			&i.InterestRate,
+			&i.MinPayment,
+			&i.DueDate,
+			&i.PaymentFrequency,
+			&i.IsOverdue,
+			&i.LateFees,
+			&i.OtherCharges,
+			&i.DebtTaken,
+			&i.RiskLevel,
+			&i.DebtHealthScore,
+			&i.Priority,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AccruedInterest,
+			&i.LastAccrualDate,
+			&i.PaymentDueDay,
+			&i.EmiAmount,
+			&i.TenureMonths,
+			&i.MonthsPaid,
+			&i.MoratoriumUntil,
+			&i.InMoratorium,
 		); err != nil {
 			return nil, err
 		}
@@ -247,7 +365,7 @@ func (q *Queries) ListAllActiveDebts(ctx context.Context) ([]Debt, error) {
 }
 
 const listUserDebts = `-- name: ListUserDebts :many
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
 FROM debts
 WHERE user_id = $1
 ORDER BY priority DESC, due_date ASC
@@ -286,6 +404,12 @@ func (q *Queries) ListUserDebts(ctx context.Context, userID uuid.UUID) ([]Debt, 
 			&i.UpdatedAt,
 			&i.AccruedInterest,
 			&i.LastAccrualDate,
+			&i.PaymentDueDay,
+			&i.EmiAmount,
+			&i.TenureMonths,
+			&i.MonthsPaid,
+			&i.MoratoriumUntil,
+			&i.InMoratorium,
 		); err != nil {
 			return nil, err
 		}
@@ -381,5 +505,17 @@ type UpdateDebtHealthScoreParams struct {
 
 func (q *Queries) UpdateDebtHealthScore(ctx context.Context, arg UpdateDebtHealthScoreParams) error {
 	_, err := q.db.ExecContext(ctx, updateDebtHealthScore, arg.ID, arg.DebtHealthScore)
+	return err
+}
+
+const updateLoanPayment = `-- name: UpdateLoanPayment :exec
+UPDATE debts
+SET months_paid = months_paid + 1,
+	updated_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) UpdateLoanPayment(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, updateLoanPayment, id)
 	return err
 }

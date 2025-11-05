@@ -3,11 +3,13 @@ INSERT INTO debts (
   user_id, name, type, lender, principal_decimal,
   outstanding_balance, interest_rate, min_payment,
   due_date, payment_frequency, debt_taken,
-  risk_level, priority, notes
+  risk_level, priority, notes,
+  payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+  $15, $16, $17, $18, $19, $20
 )
-RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date;
+RETURNING *;
 
 -- name: ListUserDebts :many
 SELECT *
@@ -51,7 +53,7 @@ SET accrued_interest = 0,
 WHERE id = $1;
 
 -- name: GetDebtForUpdate :one
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+SELECT *
 FROM debts
 WHERE id = $1 AND user_id = $2
 FOR UPDATE;
@@ -65,6 +67,27 @@ SET outstanding_balance = $2,
 WHERE id = $1;
 
 -- name: ListAllActiveDebts :many
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date
+SELECT *
 FROM debts
 WHERE outstanding_balance > 0 OR accrued_interest > 0;
+
+-- name: UpdateLoanPayment :exec
+UPDATE debts
+SET months_paid = months_paid + 1,
+	updated_at = now()
+WHERE id = $1;
+
+-- name: ExitMoratorium :exec
+UPDATE debts
+SET in_moratorium = FALSE,
+	emi_amount = $2,
+	updated_at = now()
+WHERE id = $1;
+
+-- name: ListLoansNeedingEMI :many
+SELECT *
+FROM debts
+WHERE type IN ('personal_loan', 'student_loan', 'mortgage')
+	AND payment_due_day IS NOT NULL
+	AND outstanding_balance > 0
+	AND EXTRACT(DAY FROM CURRENT_DATE) = payment_due_day;

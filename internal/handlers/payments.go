@@ -105,7 +105,7 @@ func HandleRecordPayment(cfg *api.Config, db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		svc := service.New(db)
+		svc := service.NewPaymentService(cfg, db)
 		payment, updated, err := svc.RecordPayment(ctx, service.RecordPaymentParams{
 			UserID:        userID,
 			DebtID:        debtID,

@@ -77,6 +77,35 @@ func HandleCreateDebt(cfg *api.Config) http.HandlerFunc {
 			notes = sql.NullString{String: *req.Notes, Valid: *req.Notes != ""}
 		}
 
+		// Handle loan-specific fields
+		var paymentDueDay sql.NullInt32
+		if req.PaymentDueDay != nil {
+			paymentDueDay = sql.NullInt32{Int32: *req.PaymentDueDay, Valid: true}
+		}
+
+		var emiAmount sql.NullString
+		if req.EMIAmount != nil {
+			emiAmount = sql.NullString{String: req.EMIAmount.String(), Valid: true}
+		} else if req.Type == "personal_loan" || req.Type == "student_loan" || req.Type == "mortgage" {
+			// Calculate EMI if not provided for loan types
+			if req.TenureMonths != nil && *req.TenureMonths > 0 {
+				emi := calculateEMI(req.Principal, req.InterestRate, int(*req.TenureMonths))
+				emiAmount = sql.NullString{String: emi.String(), Valid: true}
+			}
+		}
+
+		var tenureMonths sql.NullInt32
+		if req.TenureMonths != nil {
+			tenureMonths = sql.NullInt32{Int32: *req.TenureMonths, Valid: true}
+		}
+
+		var moratoriumUntil sql.NullTime
+		if req.MoratoriumUntil != nil {
+			moratoriumUntil = sql.NullTime{Time: *req.MoratoriumUntil, Valid: true}
+		}
+
+		inMoratorium := req.MoratoriumUntil != nil && req.MoratoriumUntil.After(time.Now())
+
 		params := database.CreateDebtParams{
 			UserID:             userID,
 			Name:               req.Name,
@@ -92,6 +121,12 @@ func HandleCreateDebt(cfg *api.Config) http.HandlerFunc {
 			RiskLevel:          risk,
 			Priority:           priority,
 			Notes:              notes,
+			PaymentDueDay:      paymentDueDay,
+			EmiAmount:          emiAmount,
+			TenureMonths:       tenureMonths,
+			MonthsPaid:         sql.NullInt32{Int32: 0, Valid: true},
+			MoratoriumUntil:    moratoriumUntil,
+			InMoratorium:       sql.NullBool{Bool: inMoratorium, Valid: true},
 		}
 
 		ctx := context.Background()
@@ -100,6 +135,36 @@ func HandleCreateDebt(cfg *api.Config) http.HandlerFunc {
 			logger.Logger.Errorw("CreateDebt failed", "error", err)
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create debt")
 			return
+		}
+
+		// If credit card, create credit_cards entry
+		if req.Type == "credit_card" {
+			if req.BillingDay == nil || req.GracePeriodDays == nil {
+				utils.RespondWithError(w, http.StatusBadRequest, "billing_day and grace_period_days required for credit cards")
+				return
+			}
+
+			minPayPercent := decimal.NewFromFloat(5.00)
+			if req.MinPaymentPercent != nil {
+				minPayPercent = *req.MinPaymentPercent
+			}
+
+			ccParams := database.CreateCreditCardParams{
+				DebtID:            debt.ID,
+				BillingDay:        *req.BillingDay,
+				GracePeriodDays:   *req.GracePeriodDays,
+				MinPaymentPercent: minPayPercent,
+				BilledBalance:     decimal.Zero,
+				UnbilledBalance:   req.OutstandingBalance,
+				InGracePeriod:     true,
+			}
+
+			_, err := cfg.DB.CreateCreditCard(ctx, ccParams)
+			if err != nil {
+				logger.Logger.Errorw("CreateCreditCard failed", "error", err)
+				utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create credit card")
+				return
+			}
 		}
 
 		utils.RespondWithJSON(w, http.StatusCreated, toDebtResponse(debt))
@@ -346,6 +411,42 @@ func toDebtResponse(d database.Debt) models.DebtResponse {
 		updatedAt = d.UpdatedAt.Time
 	}
 
+	// AccruedInterest and LastAccrualDate are direct fields, not Null types
+	accruedInterest := d.AccruedInterest
+	lastAccrualDate := d.LastAccrualDate
+
+	// Parse loan fields
+	var paymentDueDay *int32
+	if d.PaymentDueDay.Valid {
+		v := d.PaymentDueDay.Int32
+		paymentDueDay = &v
+	}
+	var emiAmount *decimal.Decimal
+	if d.EmiAmount.Valid {
+		if v, err := decimal.NewFromString(d.EmiAmount.String); err == nil {
+			emiAmount = &v
+		}
+	}
+	var tenureMonths *int32
+	if d.TenureMonths.Valid {
+		v := d.TenureMonths.Int32
+		tenureMonths = &v
+	}
+	var monthsPaid *int32
+	if d.MonthsPaid.Valid {
+		v := d.MonthsPaid.Int32
+		monthsPaid = &v
+	}
+	var moratoriumUntil *time.Time
+	if d.MoratoriumUntil.Valid {
+		moratoriumUntil = &d.MoratoriumUntil.Time
+	}
+	var inMoratorium *bool
+	if d.InMoratorium.Valid {
+		v := d.InMoratorium.Bool
+		inMoratorium = &v
+	}
+
 	return models.DebtResponse{
 		ID:                 d.ID.String(),
 		UserID:             d.UserID.String(),
@@ -366,7 +467,44 @@ func toDebtResponse(d database.Debt) models.DebtResponse {
 		DebtHealthScore:    score,
 		Priority:           priority,
 		Notes:              notes,
+		AccruedInterest:    accruedInterest,
+		LastAccrualDate:    lastAccrualDate,
 		CreatedAt:          createdAt,
 		UpdatedAt:          updatedAt,
+		PaymentDueDay:      paymentDueDay,
+		EMIAmount:          emiAmount,
+		TenureMonths:       tenureMonths,
+		MonthsPaid:         monthsPaid,
+		MoratoriumUntil:    moratoriumUntil,
+		InMoratorium:       inMoratorium,
 	}
+}
+
+// calculateEMI calculates EMI using reducing balance formula
+// EMI = P * r * (1+r)^n / ((1+r)^n - 1)
+// where P = principal, r = monthly interest rate, n = number of months
+func calculateEMI(principal, annualRate decimal.Decimal, months int) decimal.Decimal {
+	if months == 0 {
+		return decimal.Zero
+	}
+
+	// Convert annual rate to monthly rate: APR / 1200
+	monthlyRate := annualRate.Div(decimal.NewFromInt(1200))
+
+	if monthlyRate.IsZero() {
+		return principal.Div(decimal.NewFromInt(int64(months)))
+	}
+
+	// Calculate (1 + r)
+	onePlusR := decimal.NewFromInt(1).Add(monthlyRate)
+
+	// Calculate (1 + r)^n using Pow
+	onePlusRPowN := onePlusR.Pow(decimal.NewFromInt(int64(months)))
+
+	// EMI = P * r * (1+r)^n / ((1+r)^n - 1)
+	numerator := principal.Mul(monthlyRate).Mul(onePlusRPowN)
+	denominator := onePlusRPowN.Sub(decimal.NewFromInt(1))
+
+	emi := numerator.Div(denominator)
+	return emi.Round(2)
 }

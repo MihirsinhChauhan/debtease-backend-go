@@ -26,3 +26,4 @@ type PaymentResponse struct {
 	PaymentMethod    *string         `json:"payment_method,omitempty"`
 	CreatedAt        time.Time       `json:"created_at"`
 }
+

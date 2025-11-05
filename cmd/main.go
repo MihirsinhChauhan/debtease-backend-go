@@ -115,8 +115,11 @@ func main() {
 		// mux.Handle("DELETE /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, deleteDebt)))
 	}
 
-	// Start worker (daily accrual)
-	worker.StartDailyAccrual(context.Background(), dbQueries, 24*time.Hour)
+	// Start workers
+	ctx := context.Background()
+	worker.StartDailyAccrual(ctx, dbQueries, 24*time.Hour)              // Daily interest accrual for credit cards
+	worker.StartCreditCardStatementWorker(ctx, dbQueries, 24*time.Hour) // Credit card statement generation
+	worker.StartLoanEMIWorker(ctx, dbQueries, 24*time.Hour)             // Loan EMI processing
 
 	// Start server
 	logger.Logger.Infow("Server starting", "port", 8080, "platform", platform)

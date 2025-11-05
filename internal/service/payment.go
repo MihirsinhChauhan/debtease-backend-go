@@ -1,6 +1,7 @@
 package service
 
 import (
+	"DebtEase/internal/api"
 	"DebtEase/internal/database"
 	"context"
 	"database/sql"
@@ -10,13 +11,13 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-type Service struct {
-	DB *sql.DB
-	Q  *database.Queries
+type PaymentService struct {
+	cfg *api.Config
+	db  *sql.DB
 }
 
-func New(db *sql.DB) *Service {
-	return &Service{DB: db, Q: database.New(db)}
+func NewPaymentService(cfg *api.Config, db *sql.DB) *PaymentService {
+	return &PaymentService{cfg: cfg, db: db}
 }
 
 type RecordPaymentParams struct {
@@ -30,10 +31,54 @@ type RecordPaymentParams struct {
 }
 
 // accrueInterestUpTo calculates and persists interest accrual up to and including the given date.
-func (s *Service) accrueInterestUpTo(ctx context.Context, q *database.Queries, debt database.Debt, upTo time.Time) error {
-	// guard: if last_accrual_date is null, start from upTo (no accrual before)
-	lastDate := upTo
-	lastDate = debt.LastAccrualDate
+// Handles credit cards (daily after grace period) and loans (monthly on EMI date) differently.
+func (s *PaymentService) accrueInterestUpTo(ctx context.Context, q *database.Queries, debt database.Debt, upTo time.Time) error {
+	// Check if this is a credit card
+	if debt.Type == database.DebtTypeCreditCard {
+		return s.accrueCreditCardInterest(ctx, q, debt, upTo)
+	}
+
+	// For loans, check if it's time for monthly accrual
+	if debt.Type == database.DebtTypePersonalLoan ||
+		debt.Type == database.DebtTypeStudentLoan ||
+		debt.Type == database.DebtTypeMortgage {
+		return s.accrueLoanInterest(ctx, q, debt, upTo)
+	}
+
+	// For other debt types, use daily accrual
+	return s.accrueDaily(ctx, q, debt, upTo)
+}
+
+// accrueCreditCardInterest handles daily interest accrual for credit cards (only if grace period ended)
+func (s *PaymentService) accrueCreditCardInterest(ctx context.Context, q *database.Queries, debt database.Debt, upTo time.Time) error {
+	// Get credit card details
+	cc, err := q.GetCreditCardByDebtID(ctx, debt.ID)
+	if err != nil {
+		return err
+	}
+
+	// Only accrue if NOT in grace period
+	if cc.InGracePeriod {
+		return nil
+	}
+
+	// Daily accrual
+	return s.accrueDaily(ctx, q, debt, upTo)
+}
+
+// accrueLoanInterest handles monthly interest accrual for loans on EMI due day
+func (s *PaymentService) accrueLoanInterest(ctx context.Context, q *database.Queries, debt database.Debt, upTo time.Time) error {
+	// Loans accrue interest monthly, not daily
+	// This should be called only on EMI due day
+	// For payment scenarios, we calculate interest on-the-fly in RecordPayment
+	return nil
+}
+
+// accrueDaily performs daily interest accrual
+func (s *PaymentService) accrueDaily(ctx context.Context, q *database.Queries, debt database.Debt, upTo time.Time) error {
+	// LastAccrualDate is a direct time.Time field
+	lastDate := debt.LastAccrualDate
+
 	// compute whole days difference based on date only
 	start := time.Date(lastDate.Year(), lastDate.Month(), lastDate.Day(), 0, 0, 0, 0, time.UTC)
 	end := time.Date(upTo.Year(), upTo.Month(), upTo.Day(), 0, 0, 0, 0, time.UTC)
@@ -42,7 +87,7 @@ func (s *Service) accrueInterestUpTo(ctx context.Context, q *database.Queries, d
 		return nil
 	}
 
-	// daily_rate = interest_rate / 100 / 365
+	// daily_rate = interest_rate / 36500
 	dailyRate := debt.InterestRate.Div(decimal.NewFromInt(36500))
 	accrued := debt.OutstandingBalance.Mul(dailyRate).Mul(decimal.NewFromInt(int64(days)))
 
@@ -54,11 +99,11 @@ func (s *Service) accrueInterestUpTo(ctx context.Context, q *database.Queries, d
 }
 
 // RecordPayment accrues interest to payment date, splits amount into interest/principal, records payment and updates debt.
-func (s *Service) RecordPayment(ctx context.Context, arg RecordPaymentParams) (database.PaymentsHistory, database.Debt, error) {
+func (s *PaymentService) RecordPayment(ctx context.Context, arg RecordPaymentParams) (database.PaymentsHistory, database.Debt, error) {
 	var created database.PaymentsHistory
 	var updatedDebt database.Debt
 
-	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{})
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return created, updatedDebt, err
 	}
@@ -70,7 +115,7 @@ func (s *Service) RecordPayment(ctx context.Context, arg RecordPaymentParams) (d
 		}
 	}()
 
-	q := s.Q.WithTx(tx)
+	q := s.cfg.DB.WithTx(tx)
 
 	debt, err := q.GetDebtForUpdate(ctx, database.GetDebtForUpdateParams{ID: arg.DebtID, UserID: arg.UserID})
 	if err != nil {
@@ -87,8 +132,7 @@ func (s *Service) RecordPayment(ctx context.Context, arg RecordPaymentParams) (d
 	}
 
 	// Calculate total due
-	var accrued decimal.Decimal
-	accrued = debt.AccruedInterest
+	accrued := debt.AccruedInterest
 	totalDue := debt.OutstandingBalance.Add(accrued)
 	amount := arg.Amount
 	if amount.GreaterThan(totalDue) {
