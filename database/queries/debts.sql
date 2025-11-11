@@ -91,3 +91,42 @@ WHERE type IN ('personal_loan', 'student_loan', 'mortgage')
 	AND payment_due_day IS NOT NULL
 	AND outstanding_balance > 0
 	AND EXTRACT(DAY FROM CURRENT_DATE) = payment_due_day;
+
+
+
+-- name: GetDebtBreakdownByType :many
+-- Breakdown of debts by type for visualization
+SELECT 
+    type,
+    COUNT(*) as count,
+    COALESCE(SUM(outstanding_balance + accrued_interest), 0) as total_outstanding,
+    COALESCE(SUM(min_payment), 0) as total_min_payment,
+    CASE 
+        WHEN SUM(outstanding_balance) > 0 
+        THEN ROUND((SUM(interest_rate * outstanding_balance) / SUM(outstanding_balance))::numeric, 5)
+        ELSE 0
+    END as avg_interest_rate
+FROM debts
+WHERE user_id = $1 
+    AND outstanding_balance > 0
+GROUP BY type
+ORDER BY total_outstanding DESC;
+
+-- name: GetDebtsByRiskLevel :many
+-- Group debts by risk level
+SELECT 
+    risk_level,
+    COUNT(*) as count,
+    COALESCE(SUM(outstanding_balance + accrued_interest), 0) as total_outstanding,
+    COALESCE(AVG(debt_health_score), 0) as avg_health_score
+FROM debts
+WHERE user_id = $1 
+    AND outstanding_balance > 0
+    AND risk_level IS NOT NULL
+GROUP BY risk_level
+ORDER BY 
+    CASE risk_level
+        WHEN 'high' THEN 1
+        WHEN 'medium' THEN 2
+        WHEN 'low' THEN 3
+    END;

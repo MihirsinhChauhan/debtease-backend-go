@@ -146,6 +146,62 @@ func (q *Queries) ExitMoratorium(ctx context.Context, arg ExitMoratoriumParams) 
 	return err
 }
 
+const getDebtBreakdownByType = `-- name: GetDebtBreakdownByType :many
+SELECT 
+    type,
+    COUNT(*) as count,
+    COALESCE(SUM(outstanding_balance + accrued_interest), 0) as total_outstanding,
+    COALESCE(SUM(min_payment), 0) as total_min_payment,
+    CASE 
+        WHEN SUM(outstanding_balance) > 0 
+        THEN ROUND((SUM(interest_rate * outstanding_balance) / SUM(outstanding_balance))::numeric, 5)
+        ELSE 0
+    END as avg_interest_rate
+FROM debts
+WHERE user_id = $1 
+    AND outstanding_balance > 0
+GROUP BY type
+ORDER BY total_outstanding DESC
+`
+
+type GetDebtBreakdownByTypeRow struct {
+	Type             DebtType
+	Count            int64
+	TotalOutstanding interface{}
+	TotalMinPayment  interface{}
+	AvgInterestRate  int32
+}
+
+// Breakdown of debts by type for visualization
+func (q *Queries) GetDebtBreakdownByType(ctx context.Context, userID uuid.UUID) ([]GetDebtBreakdownByTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, getDebtBreakdownByType, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetDebtBreakdownByTypeRow
+	for rows.Next() {
+		var i GetDebtBreakdownByTypeRow
+		if err := rows.Scan(
+			&i.Type,
+			&i.Count,
+			&i.TotalOutstanding,
+			&i.TotalMinPayment,
+			&i.AvgInterestRate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getDebtByID = `-- name: GetDebtByID :one
 SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
 FROM debts
@@ -241,6 +297,61 @@ func (q *Queries) GetDebtForUpdate(ctx context.Context, arg GetDebtForUpdatePara
 		&i.InMoratorium,
 	)
 	return i, err
+}
+
+const getDebtsByRiskLevel = `-- name: GetDebtsByRiskLevel :many
+SELECT 
+    risk_level,
+    COUNT(*) as count,
+    COALESCE(SUM(outstanding_balance + accrued_interest), 0) as total_outstanding,
+    COALESCE(AVG(debt_health_score), 0) as avg_health_score
+FROM debts
+WHERE user_id = $1 
+    AND outstanding_balance > 0
+    AND risk_level IS NOT NULL
+GROUP BY risk_level
+ORDER BY 
+    CASE risk_level
+        WHEN 'high' THEN 1
+        WHEN 'medium' THEN 2
+        WHEN 'low' THEN 3
+    END
+`
+
+type GetDebtsByRiskLevelRow struct {
+	RiskLevel        NullRiskLevel
+	Count            int64
+	TotalOutstanding interface{}
+	AvgHealthScore   interface{}
+}
+
+// Group debts by risk level
+func (q *Queries) GetDebtsByRiskLevel(ctx context.Context, userID uuid.UUID) ([]GetDebtsByRiskLevelRow, error) {
+	rows, err := q.db.QueryContext(ctx, getDebtsByRiskLevel, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetDebtsByRiskLevelRow
+	for rows.Next() {
+		var i GetDebtsByRiskLevelRow
+		if err := rows.Scan(
+			&i.RiskLevel,
+			&i.Count,
+			&i.TotalOutstanding,
+			&i.AvgHealthScore,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAllActiveDebts = `-- name: ListAllActiveDebts :many

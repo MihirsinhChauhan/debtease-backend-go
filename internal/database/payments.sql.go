@@ -43,6 +43,37 @@ func (q *Queries) GetPaymentByID(ctx context.Context, arg GetPaymentByIDParams) 
 	return i, err
 }
 
+const getPaymentHistorySummary = `-- name: GetPaymentHistorySummary :one
+SELECT 
+    COALESCE(SUM(CASE WHEN p.payment_date >= CURRENT_DATE - INTERVAL '30 days' THEN p.amount ELSE 0 END), 0) as paid_last_30_days,
+    COALESCE(SUM(CASE WHEN p.payment_date >= CURRENT_DATE - INTERVAL '90 days' THEN p.amount ELSE 0 END), 0) as paid_last_90_days,
+    COALESCE(SUM(CASE WHEN p.payment_date >= CURRENT_DATE - INTERVAL '365 days' THEN p.amount ELSE 0 END), 0) as paid_last_year,
+    COUNT(CASE WHEN p.payment_date >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as payments_last_30_days
+FROM payments_history p
+JOIN debts d ON p.debt_id = d.id
+WHERE d.user_id = $1
+`
+
+type GetPaymentHistorySummaryRow struct {
+	PaidLast30Days     interface{}
+	PaidLast90Days     interface{}
+	PaidLastYear       interface{}
+	PaymentsLast30Days int64
+}
+
+// Payment statistics for the last 30, 90, 365 days
+func (q *Queries) GetPaymentHistorySummary(ctx context.Context, userID uuid.UUID) (GetPaymentHistorySummaryRow, error) {
+	row := q.db.QueryRowContext(ctx, getPaymentHistorySummary, userID)
+	var i GetPaymentHistorySummaryRow
+	err := row.Scan(
+		&i.PaidLast30Days,
+		&i.PaidLast90Days,
+		&i.PaidLastYear,
+		&i.PaymentsLast30Days,
+	)
+	return i, err
+}
+
 const getRecentPayments = `-- name: GetRecentPayments :many
 SELECT p.id, p.debt_id, p.amount, p.payment_date, p.type, p.notes, p.principal_applied, p.interest_applied, p.payment_method, p.created_at, d.name AS debt_name
 FROM payments_history p
@@ -92,6 +123,88 @@ func (q *Queries) GetRecentPayments(ctx context.Context, arg GetRecentPaymentsPa
 			&i.PaymentMethod,
 			&i.CreatedAt,
 			&i.DebtName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUpcomingEMIs = `-- name: GetUpcomingEMIs :many
+SELECT 
+    id,
+    name,
+    type,
+    lender,
+    outstanding_balance,
+    accrued_interest,
+    COALESCE(emi_amount, min_payment) as payment_amount,
+    due_date,
+    payment_due_day,
+    is_overdue,
+    late_fees,
+    CASE 
+        WHEN is_overdue THEN 0
+        WHEN due_date <= CURRENT_DATE THEN 0
+        ELSE (due_date - CURRENT_DATE)
+    END as days_until_due
+FROM debts
+WHERE user_id = $1 
+    AND outstanding_balance > 0
+    AND (
+        (due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days')
+        OR is_overdue = TRUE
+    )
+ORDER BY 
+    is_overdue DESC,
+    due_date ASC
+`
+
+type GetUpcomingEMIsRow struct {
+	ID                 uuid.UUID
+	Name               string
+	Type               DebtType
+	Lender             sql.NullString
+	OutstandingBalance decimal.Decimal
+	AccruedInterest    decimal.Decimal
+	PaymentAmount      decimal.Decimal
+	DueDate            time.Time
+	PaymentDueDay      sql.NullInt32
+	IsOverdue          sql.NullBool
+	LateFees           sql.NullString
+	DaysUntilDue       interface{}
+}
+
+// Returns upcoming EMI/payments within the next 30 days
+func (q *Queries) GetUpcomingEMIs(ctx context.Context, userID uuid.UUID) ([]GetUpcomingEMIsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUpcomingEMIs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUpcomingEMIsRow
+	for rows.Next() {
+		var i GetUpcomingEMIsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.Lender,
+			&i.OutstandingBalance,
+			&i.AccruedInterest,
+			&i.PaymentAmount,
+			&i.DueDate,
+			&i.PaymentDueDay,
+			&i.IsOverdue,
+			&i.LateFees,
+			&i.DaysUntilDue,
 		); err != nil {
 			return nil, err
 		}

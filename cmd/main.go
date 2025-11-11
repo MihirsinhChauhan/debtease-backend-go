@@ -78,6 +78,10 @@ func main() {
 	mux.HandleFunc("POST /api/register", handlers.HandleCreateUser(cfg))
 	mux.HandleFunc("PUT /api/users", handlers.HandleUpdateUser(cfg))
 
+	// dashboard (authenticated)
+	getDashboard := handlers.HandleGetDashboard(cfg)
+	mux.Handle("GET /api/dashboard", middleware.Logging(middleware.AuthRequired(cfg, getDashboard)))
+
 	// debts (authenticated)
 	{
 		// POST /api/debts
