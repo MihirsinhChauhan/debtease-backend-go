@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"github.com/sqlc-dev/pqtype"
 )
 
 type DebtType string
@@ -234,6 +235,20 @@ type Debt struct {
 	MonthsPaid         sql.NullInt32
 	MoratoriumUntil    sql.NullTime
 	InMoratorium       sql.NullBool
+}
+
+type NotificationEvent struct {
+	ID           uuid.UUID
+	UserID       uuid.UUID
+	EventType    string
+	Channel      string
+	Recipient    string
+	Status       string
+	ErrorMessage sql.NullString
+	Metadata     pqtype.NullRawMessage
+	SentAt       sql.NullTime
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type PaymentsHistory struct {

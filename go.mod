@@ -9,6 +9,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/shopspring/decimal v1.4.0
+	github.com/sqlc-dev/pqtype v0.3.0
 	go.uber.org/zap v1.27.0
 )
 
