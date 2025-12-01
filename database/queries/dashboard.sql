@@ -9,14 +9,14 @@ SELECT
     COALESCE(SUM(principal_decimal - outstanding_balance), 0) as total_paid,
     CASE 
         WHEN SUM(principal_decimal) > 0 
-        THEN ROUND((SUM(principal_decimal - outstanding_balance) / SUM(principal_decimal) * 100)::numeric, 2)
+        THEN CAST(ROUND((SUM(principal_decimal - outstanding_balance) / SUM(principal_decimal) * 10000)::numeric, 0) AS INTEGER)
         ELSE 0
     END as repayment_percentage,
     
     -- Debt Health (handle NULL debt_health_score by treating as 100)
     CASE 
         WHEN SUM(outstanding_balance) > 0
-        THEN ROUND((SUM(COALESCE(debt_health_score, 100) * outstanding_balance) / SUM(outstanding_balance))::numeric, 2)
+        THEN CAST(ROUND((SUM(COALESCE(debt_health_score, 100) * outstanding_balance) / SUM(outstanding_balance))::numeric, 0) AS INTEGER)
         ELSE 100
     END as overall_health_score,
     
@@ -26,7 +26,7 @@ SELECT
     -- Average Interest
     CASE 
         WHEN SUM(outstanding_balance) > 0 
-        THEN ROUND((SUM(interest_rate * outstanding_balance) / SUM(outstanding_balance))::numeric, 5)
+        THEN CAST(ROUND((SUM(interest_rate * outstanding_balance) / SUM(outstanding_balance) * 100000)::numeric, 0) AS INTEGER)
         ELSE 0
     END as weighted_avg_interest_rate,
     

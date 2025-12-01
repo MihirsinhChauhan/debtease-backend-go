@@ -76,6 +76,7 @@ func main() {
 	// auth
 	mux.HandleFunc("POST /api/login", handlers.HandleLogin(cfg))
 	mux.HandleFunc("POST /api/register", handlers.HandleCreateUser(cfg))
+	mux.HandleFunc("POST /api/refresh", handlers.HandleTokenRefresh(cfg))
 	mux.HandleFunc("PUT /api/users", handlers.HandleUpdateUser(cfg))
 
 	// dashboard (authenticated)

@@ -65,8 +65,9 @@ func HandleGetDashboard(cfg *api.Config) http.HandlerFunc {
 		response.MonthlyMinimumPayment = convertToDecimal(summary.TotalMinimumPayment)
 
 		// Convert percentages (int32) to decimal.Decimal
-		// repayment_percentage is already multiplied by 100 in SQL (50 = 50%), so keep as percentage value
-		response.RepaymentProgress.RepaymentPercentage = decimal.NewFromInt32(summary.RepaymentPercentage)
+		// repayment_percentage is multiplied by 10000 in SQL to preserve 2 decimal places (1130 = 11.30%)
+		// Divide by 100 to get the percentage value as decimal
+		response.RepaymentProgress.RepaymentPercentage = decimal.NewFromInt32(summary.RepaymentPercentage).Div(decimal.NewFromInt(100))
 		// overall_health_score is out of 100, so keep as-is
 		response.DebtHealth.OverallHealthScore = decimal.NewFromInt32(summary.OverallHealthScore)
 

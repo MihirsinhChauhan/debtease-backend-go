@@ -67,7 +67,3 @@ type PaymentHistorySummary struct {
 	PaidLastYear       decimal.Decimal `json:"paid_last_year"`
 	PaymentsLast30Days int64           `json:"payments_last_30_days"`
 }
-
-
-
-
