@@ -3,6 +3,7 @@ package main
 import (
 	"DebtEase/internal/api"
 	"DebtEase/internal/database"
+	"DebtEase/internal/events"
 	"DebtEase/internal/handlers"
 	"DebtEase/internal/logger"
 	"DebtEase/internal/middleware"
@@ -11,6 +12,8 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -48,11 +51,28 @@ func main() {
 
 	dbQueries := database.New(db)
 
+	rabbitmqURL := os.Getenv("RABBITMQ_URL")
+	if rabbitmqURL == "" {
+		rabbitmqURL = "amqp://guest:guest@localhost:5672/" // Default for local dev
+		logger.Logger.Warnw("RABBITMQ_URL not set, using default", "url", rabbitmqURL)
+	}
+
+	// Initialize RabbitMQ connection (lazy, will connect on first use)
+	// Test connection
+	_, err = events.GetChannel(rabbitmqURL)
+	if err != nil {
+		logger.Logger.Warnw("Failed to connect to RabbitMQ (notifications may not work)", "error", err)
+		// Don't fail startup - notifications are non-critical
+	} else {
+		logger.Logger.Info("RabbitMQ connection initialized")
+	}
+
 	// Initialize config
 	cfg := &api.Config{
 		DB:        dbQueries,
 		Platform:  platform,
 		JWTSecret: jwtSecret,
+		RabbitMQURL: rabbitmqURL,
 	}
 
 	// Setup router
@@ -125,6 +145,18 @@ func main() {
 	worker.StartDailyAccrual(ctx, dbQueries, 24*time.Hour)              // Daily interest accrual for credit cards
 	worker.StartCreditCardStatementWorker(ctx, dbQueries, 24*time.Hour) // Credit card statement generation
 	worker.StartLoanEMIWorker(ctx, dbQueries, 24*time.Hour)             // Loan EMI processing
+
+	// Graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		logger.Logger.Info("Shutting down gracefully...")
+		events.CloseConnections() // Close RabbitMQ connections
+		os.Exit(0)
+	}()
+
 
 	// Start server
 	logger.Logger.Infow("Server starting", "port", 8080, "platform", platform)

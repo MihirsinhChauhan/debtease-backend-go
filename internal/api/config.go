@@ -11,4 +11,5 @@ type Config struct {
 	DB             *database.Queries
 	Platform       string
 	JWTSecret	   string
+	RabbitMQURL    string
 }
