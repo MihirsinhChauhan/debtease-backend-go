@@ -8,6 +8,7 @@ import (
 	"DebtEase/internal/logger"
 	"DebtEase/internal/middleware"
 	"DebtEase/internal/worker"
+	"DebtEase/internal/pubsub"
 	"context"
 	"database/sql"
 	"net/http"
@@ -59,12 +60,20 @@ func main() {
 
 	// Initialize RabbitMQ connection (lazy, will connect on first use)
 	// Test connection
-	_, err = events.GetChannel(rabbitmqURL)
+	conn, err := pubsub.GetConnection(rabbitmqURL)
 	if err != nil {
 		logger.Logger.Warnw("Failed to connect to RabbitMQ (notifications may not work)", "error", err)
 		// Don't fail startup - notifications are non-critical
 	} else {
 		logger.Logger.Info("RabbitMQ connection initialized")
+
+		// Declare exchange once (idempotent)
+		ch, err := pubsub.DeclareExchangeWithConnection(conn, events.ExchangeNotifications)
+		if err != nil {
+			logger.Logger.Warnw("Failed to declare exchange", "error", err)
+		} else {
+			ch.Close() // Close after declaration
+		}
 	}
 
 	// Initialize config
