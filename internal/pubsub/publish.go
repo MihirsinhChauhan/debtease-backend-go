@@ -8,6 +8,8 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+
+
 func PublishJSON[T any]( channel *amqp.Channel, exchange, routingKey string, message T) error {
 	body, err := json.Marshal(message)
 	if err != nil {

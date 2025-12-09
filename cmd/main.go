@@ -9,6 +9,7 @@ import (
 	"DebtEase/internal/middleware"
 	"DebtEase/internal/worker"
 	"DebtEase/internal/pubsub"
+	"DebtEase/internal/notifications"
 	"context"
 	"database/sql"
 	"net/http"
@@ -73,6 +74,14 @@ func main() {
 			logger.Logger.Warnw("Failed to declare exchange", "error", err)
 		} else {
 			ch.Close() // Close after declaration
+		}
+		// Start notification consumer
+		ctx := context.Background()
+		if err := notifications.StartConsumer(ctx, conn, dbQueries); err != nil {
+			logger.Logger.Warnw("Failed to start notification consumer (notifications may not work)", "error", err)
+			// Don't fail startup - notifications are non-critical
+		} else {
+			logger.Logger.Info("Notification consumer started successfully")
 		}
 	}
 
@@ -162,7 +171,7 @@ func main() {
 	go func() {
 		<-sigChan
 		logger.Logger.Info("Shutting down gracefully...")
-		events.CloseConnections() // Close RabbitMQ connections
+		pubsub.CloseConnection() // Close RabbitMQ connections
 		os.Exit(0)
 	}()
 

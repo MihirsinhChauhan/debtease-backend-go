@@ -7,6 +7,7 @@ import (
 	"DebtEase/internal/logger"
 	"DebtEase/internal/models"
 	"DebtEase/internal/utils"
+	"DebtEase/internal/events"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -75,7 +76,20 @@ func HandleCreateUser(cfg *api.Config) http.HandlerFunc {
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create user")
 			return
 		}
-
+			// Publish user registered event (non-blocking, fire-and-forget)
+		go func() {
+			event := events.NewUserRegisteredEvent(
+				user.ID,
+				user.Email,
+				user.Name,
+				user.CreatedAt,
+			)
+			if err := events.PublishEvent(cfg.RabbitMQURL, events.ExchangeNotifications, events.RoutingUserRegistered, event); err != nil {
+				logger.Logger.Warnw("Failed to publish user registered event (non-critical)", 
+					"error", err,
+					"user_id", user.ID)
+			}
+		}()
 		resp := models.CreateUserResponse{
 			ID:        user.ID,
 			Email:     user.Email,

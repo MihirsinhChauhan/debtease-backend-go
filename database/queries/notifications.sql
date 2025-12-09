@@ -8,7 +8,7 @@ RETURNING id, user_id, event_type, channel, recipient, status, error_message, me
 UPDATE notification_events
 SET status = $2,
     error_message = $3,
-    sent_at = CASE WHEN $2 = 'sent' THEN now() ELSE sent_at END,
+    sent_at = CASE WHEN $2::varchar = 'sent' THEN now() ELSE sent_at END,
     updated_at = now()
 WHERE id = $1
 RETURNING id, user_id, event_type, channel, recipient, status, error_message, metadata, sent_at, created_at, updated_at;
