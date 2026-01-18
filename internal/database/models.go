@@ -7,6 +7,7 @@ package database
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -191,6 +192,33 @@ func (ns NullRiskLevel) Value() (driver.Value, error) {
 	return string(ns.RiskLevel), nil
 }
 
+type CalculationEvent struct {
+	ID        uuid.UUID
+	SessionID uuid.UUID
+	EventType string
+	Metadata  json.RawMessage
+	CreatedAt time.Time
+}
+
+type CalculationSession struct {
+	ID            uuid.UUID
+	SessionID     uuid.UUID
+	EngineVersion string
+	CreatedAt     time.Time
+}
+
+type CalculationSessionMetric struct {
+	SessionID          uuid.UUID
+	EngineVersion      string
+	CalculationRuns    int32
+	StrategySwitches   int32
+	InputModifications int32
+	PdfRequested       bool
+	EmailSubmitted     bool
+	FirstSeenAt        time.Time
+	LastSeenAt         time.Time
+}
+
 type CreditCard struct {
 	DebtID            uuid.UUID
 	BillingDay        int32
@@ -235,6 +263,14 @@ type Debt struct {
 	MonthsPaid         sql.NullInt32
 	MoratoriumUntil    sql.NullTime
 	InMoratorium       sql.NullBool
+}
+
+type LeadEmail struct {
+	ID        uuid.UUID
+	Email     string
+	Source    string
+	SessionID uuid.NullUUID
+	CreatedAt time.Time
 }
 
 type NotificationEvent struct {
