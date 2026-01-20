@@ -30,7 +30,7 @@ import (
 func main() {
 	// Load .env
 	if err := godotenv.Load(); err != nil {
-		logger.Logger.Fatalw("Error loading .env file", "error", err)
+		logger.Logger.Warnw("Error loading .env file", "error", err)
 	}
 
 	dbURL := os.Getenv("DB_URL")
