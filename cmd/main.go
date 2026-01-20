@@ -200,7 +200,12 @@ func main() {
 		os.Exit(0)
 	}()
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default for local dev
+	}
+
 	// Start server
-	logger.Logger.Infow("Server starting", "port", 8080, "platform", platform)
-	logger.Logger.Fatal(http.ListenAndServe(":8080", mux))
+	logger.Logger.Infow("Server starting", "port", port, "platform", platform)
+	logger.Logger.Fatal(http.ListenAndServe(":"+port, mux))
 }
