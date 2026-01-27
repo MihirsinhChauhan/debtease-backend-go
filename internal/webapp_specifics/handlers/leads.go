@@ -99,6 +99,15 @@ func HandleWaitlist(cfg *api.Config) http.HandlerFunc {
 		if err != nil || sessionID == uuid.Nil {
 			logger.Logger.Infow("No session_id in cookie for waitlist request (optional)")
 			sessionID = uuid.Nil // Will be handled as null by CreateLeadEmail
+		} else {
+			exists, err := webapp_service.SessionExists(ctx, cfg.DB, sessionID)
+			if err != nil {
+				// log, and probably treat as no session instead of failing waitlist
+				sessionID = uuid.Nil
+			} else if !exists {
+				// stale/invalid cookie; ignore it to avoid FK error
+				sessionID = uuid.Nil
+			}
 		}
 
 		// Parse request
