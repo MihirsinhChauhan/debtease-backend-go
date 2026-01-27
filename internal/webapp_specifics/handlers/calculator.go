@@ -67,7 +67,11 @@ func HandleBaselineCalculate(cfg *api.Config) http.HandlerFunc {
 		}
 
 		// Emit result_viewed event
-		if err := webapp_service.EmitEvent(ctx, cfg.DB, sessionID, "result_viewed", nil); err != nil {
+		if err := webapp_service.EmitEvent(ctx, cfg.DB, sessionID, "result_viewed", map[string]interface{}{
+			"loans":          req.Loans,
+			"engine_version": engineVersion,
+			"screen":         "baseline_calculator",
+		}); err != nil {
 			logger.Logger.Warnw("Failed to emit result_viewed event", "error", err)
 			// Don't fail the request, just log
 		}
@@ -126,8 +130,11 @@ func HandleStrategyCalculate(cfg *api.Config) http.HandlerFunc {
 
 		// Emit strategy_changed event
 		if err := webapp_service.EmitEvent(ctx, cfg.DB, sessionID, "strategy_changed", map[string]interface{}{
-			"strategy":      req.Strategy,
-			"monthly_extra": req.MonthlyExtra,
+			"strategy":       req.Strategy,
+			"monthly_extra":  req.MonthlyExtra,
+			"loans":          req.Loans,
+			"engine_version": engineVersion,
+			"screen":         "strategy_calculator",
 		}); err != nil {
 			logger.Logger.Warnw("Failed to emit strategy_changed event", "error", err)
 			// Don't fail the request, just log
@@ -142,7 +149,13 @@ func HandleStrategyCalculate(cfg *api.Config) http.HandlerFunc {
 		}
 
 		// Emit result_viewed event
-		if err := webapp_service.EmitEvent(ctx, cfg.DB, sessionID, "result_viewed", nil); err != nil {
+		if err := webapp_service.EmitEvent(ctx, cfg.DB, sessionID, "result_viewed", map[string]interface{}{
+			"strategy":       req.Strategy,
+			"monthly_extra":  req.MonthlyExtra,
+			"loans":          req.Loans,
+			"engine_version": engineVersion,
+			"screen":         "strategy_calculator",
+		}); err != nil {
 			logger.Logger.Warnw("Failed to emit result_viewed event", "error", err)
 			// Don't fail the request, just log
 		}
