@@ -1,13 +1,19 @@
 package repayment_v1
 
-import "testing"
-import "DebtEase/internal/domain/repayment/v1"
-import "math"
+import (
+	"testing"
+
+	repayment_v1 "DebtEase/internal/domain/repayment/v1"
+	"github.com/shopspring/decimal"
+)
+
 func TestGoldenCase_SingleLoanBaseline(t *testing.T) {
+	t.Parallel()
+
 	loan := repayment_v1.Loan{
 		ID:           "HL",
-		Principal:    1000000,
-		AnnualRate:   9,
+		Principal:    decimal.RequireFromString("1000000"),
+		AnnualRate:   decimal.RequireFromString("9"),
 		TenureMonths: 120,
 	}
 
@@ -18,12 +24,16 @@ func TestGoldenCase_SingleLoanBaseline(t *testing.T) {
 	if summary.Months != 120 {
 		t.Fatalf("months changed: %d", summary.Months)
 	}
-	const expectedInterest = 520109.10
-	if math.Abs(summary.TotalInterest-expectedInterest) > 1 {
+
+	// With decimal + round-half-up, expected interest may differ from legacy float engine.
+	expectedInterest := decimal.RequireFromString("520109.10")
+	diff := summary.TotalInterest.Sub(expectedInterest).Abs()
+	if diff.GreaterThan(decimal.NewFromFloat(1)) {
 		t.Fatalf(
-			"interest drift detected: expected %.2f got %.2f",
-			expectedInterest,
-			summary.TotalInterest,
+			"interest drift detected: expected %s got %s",
+			expectedInterest.StringFixed(2),
+			summary.TotalInterest.StringFixed(2),
 		)
 	}
 }
+

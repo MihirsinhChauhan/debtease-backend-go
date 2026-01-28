@@ -1,5 +1,7 @@
 package repayment_v1
 
+import "github.com/shopspring/decimal"
+
 type StrategyType string
 
 const (
@@ -8,35 +10,38 @@ const (
 	StrategyAvalanche StrategyType = "AVALANCHE"
 )
 
+// Loan represents a single loan's basic parameters.
+// Money values use decimal.Decimal to avoid floating point rounding errors.
 type Loan struct {
 	ID               string
-	Principal        float64
-	AnnualRate       float64
+	Principal        decimal.Decimal
+	AnnualRate       decimal.Decimal // percentage, e.g. 12 for 12%
 	TenureMonths     int
 	MoratoriumMonths int
 }
 
+// EMIRecord represents a single period's cashflow for a loan.
 type EMIRecord struct {
-	LoanID          string
-	Month           int
-	OpeningBalance  float64
-	EMI             float64
-	Interest        float64
-	Principal       float64
-	ClosingBalance  float64
+	LoanID         string
+	Month          int
+	OpeningBalance decimal.Decimal
+	EMI            decimal.Decimal
+	Interest       decimal.Decimal
+	Principal      decimal.Decimal
+	ClosingBalance decimal.Decimal
 }
 
 type PortfolioSummary struct {
 	Months         int
-	TotalPaid      float64
-	TotalInterest  float64
-	TotalPrincipal float64
+	TotalPaid      decimal.Decimal
+	TotalInterest  decimal.Decimal
+	TotalPrincipal decimal.Decimal
 }
 
 type CalculationInput struct {
 	Loans        []Loan
 	Strategy     StrategyType
-	MonthlyExtra float64
+	MonthlyExtra decimal.Decimal
 }
 
 type CalculationResult struct {

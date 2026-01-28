@@ -1,12 +1,28 @@
 package repayment_v1
 
-import "testing"
-import "DebtEase/internal/domain/repayment/v1"
+import (
+	"testing"
+
+	repayment_v1 "DebtEase/internal/domain/repayment/v1"
+	"github.com/shopspring/decimal"
+)
 
 func TestPortfolioScheduleAggregatesLoans(t *testing.T) {
+	t.Parallel()
+
 	loans := []repayment_v1.Loan{
-		{ID: "HL", Principal: 1000000, AnnualRate: 9, TenureMonths: 120},
-		{ID: "PL", Principal: 300000, AnnualRate: 12, TenureMonths: 36},
+		{
+			ID:           "HL",
+			Principal:    decimal.RequireFromString("1000000"),
+			AnnualRate:   decimal.RequireFromString("9"),
+			TenureMonths: 120,
+		},
+		{
+			ID:           "PL",
+			Principal:    decimal.RequireFromString("300000"),
+			AnnualRate:   decimal.RequireFromString("12"),
+			TenureMonths: 36,
+		},
 	}
 
 	portfolio := repayment_v1.GeneratePortfolioSchedule(loans)
@@ -20,3 +36,4 @@ func TestPortfolioScheduleAggregatesLoans(t *testing.T) {
 		t.Fatalf("expected 2 loan records in month 1, got %d", len(month1))
 	}
 }
+

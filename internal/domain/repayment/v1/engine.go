@@ -1,56 +1,88 @@
 package repayment_v1
 
-import "math"
+import "github.com/shopspring/decimal"
 
-func CalculateEMI(principal float64, annualRate float64, tenureMonths int) float64 {
-	r := annualRate / 12 / 100
-	if r == 0 {
-		return round(principal/float64(tenureMonths), 2)
+// CalculateEMI computes the standard EMI for a loan using decimal arithmetic.
+// principal and annualRatePct are decimals; annualRatePct is like 12 for 12%.
+func CalculateEMI(principal decimal.Decimal, annualRatePct decimal.Decimal, tenureMonths int) decimal.Decimal {
+	if tenureMonths <= 0 {
+		return decimalZero
 	}
 
-	emi := principal * r * math.Pow(1+r, float64(tenureMonths)) /
-		(math.Pow(1+r, float64(tenureMonths)) - 1)
+	r := monthlyRate(annualRatePct) // decimal monthly rate
+	if r.IsZero() {
+		return money(principal.Div(decimal.NewFromInt(int64(tenureMonths))))
+	}
 
-	return round(emi, 2)
+	one := decimal.NewFromInt(1)
+	rPlusOne := one.Add(r)
+	pow := powDecimal(rPlusOne, tenureMonths)
+
+	// emi = P * r * (1+r)^n / ((1+r)^n - 1)
+	numerator := principal.Mul(r).Mul(pow)
+	denominator := pow.Sub(one)
+	if denominator.IsZero() {
+		return money(principal.Div(decimal.NewFromInt(int64(tenureMonths))))
+	}
+
+	emi := numerator.Div(denominator)
+	return money(emi)
 }
 
+// GenerateLoanSchedule generates the EMI schedule for a single loan.
 func GenerateLoanSchedule(loan Loan) []EMIRecord {
-	r := loan.AnnualRate / 12 / 100
+	r := monthlyRate(loan.AnnualRate)
 	emi := CalculateEMI(loan.Principal, loan.AnnualRate, loan.TenureMonths)
 	balance := loan.Principal
 
 	var schedule []EMIRecord
 	month := 1
 
-	// Moratorium
+	// Moratorium: interest accrues, no EMI; opening balance is previous closing.
 	for i := 0; i < loan.MoratoriumMonths; i++ {
-		interest := round(balance*r, 2)
-		balance = round(balance+interest, 2)
+		opening := balance
+		interest := money(opening.Mul(r))
+		balance = money(opening.Add(interest))
 
 		schedule = append(schedule, EMIRecord{
 			LoanID:         loan.ID,
 			Month:          month,
-			OpeningBalance: balance - interest,
-			EMI:            0,
+			OpeningBalance: opening,
+			EMI:            decimalZero,
 			Interest:       interest,
-			Principal:      0,
+			Principal:      decimalZero,
 			ClosingBalance: balance,
 		})
 		month++
 	}
 
 	// Repayment
-	for balance > 0 {
+	for !isEffectivelyZero(balance) && balance.GreaterThan(decimalZero) {
 		opening := balance
-		interest := round(balance*r, 2)
+		interest := money(opening.Mul(r))
 
-		effectiveEMI := math.Min(emi, round(balance+interest, 2))
-		principal := round(effectiveEMI-interest, 2)
-		balance = round(balance-principal, 2)
+		// Determine if this is the last installment: total due <= normal EMI within tolerance.
+		totalDue := money(opening.Add(interest))
+		effectiveEMI := emi
+		principal := decimalZero
+		closing := decimalZero
 
-		if balance < 0 {
-			balance = 0
+		if totalDue.LessThanOrEqual(emi) || totalDue.Sub(emi).Abs().LessThan(decimal.NewFromFloat(0.005)) {
+			// Last installment: keep EMI <= normal EMI, clear principal fully.
+			effectiveEMI = totalDue
+			principal = opening
+			closing = decimalZero
+		} else {
+			// Regular installment.
+			effectiveEMI = decimal.Min(emi, totalDue)
+			principal = money(effectiveEMI.Sub(interest))
+			closing = money(opening.Sub(principal))
+			if closing.LessThan(decimalZero) || isEffectivelyZero(closing) {
+				closing = decimalZero
+			}
 		}
+
+		balance = closing
 
 		schedule = append(schedule, EMIRecord{
 			LoanID:         loan.ID,
@@ -59,16 +91,11 @@ func GenerateLoanSchedule(loan Loan) []EMIRecord {
 			EMI:            effectiveEMI,
 			Interest:       interest,
 			Principal:      principal,
-			ClosingBalance: balance,
+			ClosingBalance: closing,
 		})
 
 		month++
 	}
 
 	return schedule
-}
-
-func round(v float64, precision int) float64 {
-	p := math.Pow(10, float64(precision))
-	return math.Round(v*p) / p
 }

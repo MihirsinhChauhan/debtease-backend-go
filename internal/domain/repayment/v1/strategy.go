@@ -1,16 +1,18 @@
 package repayment_v1
 
+import "github.com/shopspring/decimal"
+
 type loanState struct {
 	Loan    Loan
-	Balance float64
-	EMI     float64
+	Balance decimal.Decimal
+	EMI     decimal.Decimal
 	Active  bool
 }
 
 func ApplyStrategy(
 	loans []Loan,
 	strategy StrategyType,
-	monthlyExtra float64,
+	monthlyExtra decimal.Decimal,
 ) map[int][]EMIRecord {
 
 	states := make(map[string]*loanState)
@@ -35,15 +37,17 @@ func ApplyStrategy(
 				continue
 			}
 
-			r := s.Loan.AnnualRate / 12 / 100
+			r := monthlyRate(s.Loan.AnnualRate)
 			opening := s.Balance
-			interest := round(opening*r, 2)
-			emi := min(s.EMI, opening+interest)
-			principal := round(emi-interest, 2)
-			closing := round(opening-principal, 2)
+			interest := money(opening.Mul(r))
 
-			if closing <= 0 {
-				closing = 0
+			totalDue := money(opening.Add(interest))
+			emi := decimal.Min(s.EMI, totalDue)
+			principal := money(emi.Sub(interest))
+			closing := money(opening.Sub(principal))
+
+			if closing.LessThan(decimalZero) || isEffectivelyZero(closing) {
+				closing = decimalZero
 				s.Active = false
 			}
 
@@ -61,21 +65,22 @@ func ApplyStrategy(
 		}
 
 		// Prepayment
-		if monthlyExtra > 0 && strategy != StrategyBaseline {
+		if monthlyExtra.GreaterThan(decimalZero) && strategy != StrategyBaseline {
 			target := selectTarget(states, strategy)
 			if target != nil {
-				extra := min(monthlyExtra, target.Balance)
-				target.Balance = round(target.Balance-extra, 2)
+				extra := decimal.Min(monthlyExtra, target.Balance)
+				target.Balance = money(target.Balance.Sub(extra))
 
 				for i := range records {
 					if records[i].LoanID == target.Loan.ID {
-						records[i].Principal += extra
+						records[i].Principal = records[i].Principal.Add(extra)
 						records[i].ClosingBalance = target.Balance
 						break
 					}
 				}
 
-				if target.Balance <= 0 {
+				if target.Balance.LessThan(decimalZero) || isEffectivelyZero(target.Balance) {
+					target.Balance = decimalZero
 					target.Active = false
 				}
 			}
@@ -103,11 +108,11 @@ func selectTarget(states map[string]*loanState, strategy StrategyType) *loanStat
 
 		switch strategy {
 		case StrategySnowball:
-			if s.Balance < selected.Balance {
+			if s.Balance.LessThan(selected.Balance) {
 				selected = s
 			}
 		case StrategyAvalanche:
-			if s.Loan.AnnualRate > selected.Loan.AnnualRate {
+			if s.Loan.AnnualRate.GreaterThan(selected.Loan.AnnualRate) {
 				selected = s
 			}
 		}
@@ -125,9 +130,3 @@ func anyActive(states map[string]*loanState) bool {
 	return false
 }
 
-func min(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
-}

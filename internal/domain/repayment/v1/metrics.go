@@ -1,8 +1,9 @@
 package repayment_v1
 
+import "github.com/shopspring/decimal"
 
 func SummarizePortfolio(schedule map[int][]EMIRecord) PortfolioSummary {
-	var paid, interest, principal float64
+	var paid, interest, principal decimal.Decimal
 	lastMonth := 0
 
 	for m, records := range schedule {
@@ -10,16 +11,17 @@ func SummarizePortfolio(schedule map[int][]EMIRecord) PortfolioSummary {
 			lastMonth = m
 		}
 		for _, r := range records {
-			paid += r.EMI
-			interest += r.Interest
-			principal += r.Principal
+			paid = paid.Add(r.EMI)
+			interest = interest.Add(r.Interest)
+			principal = principal.Add(r.Principal)
 		}
 	}
 
 	return PortfolioSummary{
 		Months:         lastMonth,
-		TotalPaid:      round(paid, 2),
-		TotalInterest:  round(interest, 2),
-		TotalPrincipal: round(principal, 2),
+		TotalPaid:      money(paid),
+		TotalInterest:  money(interest),
+		TotalPrincipal: money(principal),
 	}
 }
+
