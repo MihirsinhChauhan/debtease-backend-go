@@ -5,7 +5,7 @@ import (
 	"DebtEase/internal/database"
 
 	// "DebtEase/internal/events"
-	"DebtEase/internal/handlers"
+	// "DebtEase/internal/handlers"
 	"DebtEase/internal/logger"
 	"DebtEase/internal/middleware"
 
