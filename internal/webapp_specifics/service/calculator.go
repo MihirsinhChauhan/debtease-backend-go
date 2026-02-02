@@ -4,6 +4,8 @@ import (
 	repayment_v1 "DebtEase/internal/domain/repayment/v1"
 	"DebtEase/internal/webapp_specifics/models"
 	"context"
+
+	"github.com/shopspring/decimal"
 )
 
 const DefaultEngineVersion = repayment_v1.EngineVersion
@@ -49,7 +51,7 @@ func CalculateBaseline(ctx context.Context, loans []models.LoanInput, engineVers
 	}, nil
 }
 
-func CalculateStrategy(ctx context.Context, loans []models.LoanInput, strategy string, monthlyExtra float64, engineVersion string) (*models.StrategyCalculateResponse, error) {
+func CalculateStrategy(ctx context.Context, loans []models.LoanInput, strategy string, monthlyExtra decimal.Decimal, engineVersion string) (*models.StrategyCalculateResponse, error) {
 	if engineVersion == "" {
 		engineVersion = DefaultEngineVersion
 	}
@@ -87,7 +89,7 @@ func CalculateStrategy(ctx context.Context, loans []models.LoanInput, strategy s
 
 	// Calculate delta
 	delta := models.Delta{
-		InterestSaved: baselineSummary.TotalInterest - strategySummary.TotalInterest,
+		InterestSaved: baselineSummary.TotalInterest.Sub(strategySummary.TotalInterest),
 		MonthsSaved:   baselineSummary.Months - strategySummary.Months,
 	}
 

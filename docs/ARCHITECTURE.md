@@ -1,5 +1,187 @@
 # DebtEase Backend - High Level Architecture
 
+## Webapp Implementation Architecture (High Level)
+
+This section describes the **full-stack webapp**: domain logic, Go backend, and Next.js frontend. The webapp offers **standalone calculators** (baseline + strategy) for debt payoff, with no auth required. It is distinct from the **app API** (debts, payments, dashboard, workers), which is documented in the rest of this file.
+
+### System Overview: Domain, Backend, Frontend
+
+```mermaid
+graph TB
+    subgraph "Frontend (Next.js)"
+        WEB[debtease-webapp]
+        CALC[Calculator Pages<br/>Baseline / Strategy]
+        API_CLIENT[lib/api.ts]
+        WEB --> CALC
+        CALC --> API_CLIENT
+    end
+
+    subgraph "Backend (Go)"
+        ROUTER[ServeMux Router]
+        MW[Logging / Metrics]
+        WEBAPP_H[Webapp Handlers<br/>Calculator, Events, Leads]
+        CALC_SVC[Calculator Service]
+        ROUTER --> MW
+        MW --> WEBAPP_H
+        WEBAPP_H --> CALC_SVC
+    end
+
+    subgraph "Domain"
+        DOMAIN[repayment/v1]
+        ENGINE[EMI Engine<br/>Portfolio Schedule<br/>Avalanche / Snowball]
+        DOMAIN --> ENGINE
+    end
+
+    subgraph "Persistence"
+        PG[PostgreSQL]
+        SESSIONS[calculation_sessions]
+        EVENTS[calculation_events]
+        LEADS[lead_emails]
+        PG --> SESSIONS
+        PG --> EVENTS
+        PG --> LEADS
+    end
+
+    API_CLIENT -->|POST /api/v1/calculate/*, /api/events, /api/waitlist, /api/pdf-request| ROUTER
+    CALC_SVC --> DOMAIN
+    WEBAPP_H --> PG
+```
+
+### Domain Layer
+
+The **repayment domain** (`internal/domain/repayment/v1`) is a **pure, finance-focused** engine. It owns EMI math, schedule generation, and strategy application. No HTTP, no DB.
+
+| Concept | Description |
+|--------|-------------|
+| **Loan** | `Principal`, `AnnualRate`, `TenureMonths`, `MoratoriumMonths` |
+| **EMIRecord** | Per-month: `OpeningBalance`, `EMI`, `Interest`, `Principal`, `ClosingBalance` |
+| **PortfolioSummary** | `Months`, `TotalPaid`, `TotalInterest`, `TotalPrincipal` |
+| **StrategyType** | `BASELINE`, `AVALANCHE`, `SNOWBALL` |
+
+**Key functions:**
+
+- `CalculateEMI(principal, annualRate, tenureMonths)` — reducing-balance formula.
+- `GenerateLoanSchedule(loan)` — month-by-month schedule per loan (moratorium → repayment).
+- `GeneratePortfolioSchedule(loans)` — combined portfolio schedule.
+- `SummarizePortfolio(schedule)` — totals and debt-free month.
+- `ApplyStrategy(loans, strategy, monthlyExtra)` — Avalanche or Snowball with extra payments.
+
+Engine version is fixed (`EngineVersion`). See `docs/loan_engine.md` for formulae and behaviour.
+
+### Backend (Go)
+
+**Entrypoint:** `cmd/main.go` — `net/http` ServeMux, middleware (logging, metrics), then route handlers.
+
+**Webapp-specific surface (no auth):**
+
+| Route | Handler | Purpose |
+|-------|---------|---------|
+| `POST /api/v1/calculate/baseline` | `HandleBaselineCalculate` | Portfolio baseline (EMI-only) schedule + summary |
+| `POST /api/v1/calculate/strategy` | `HandleStrategyCalculate` | Avalanche/Snowball + extra payment vs baseline |
+| `POST /api/events` | `HandleCreateEvent` | Analytics events (e.g. `input_modified_after_result`) |
+| `POST /api/pdf-request` | `HandlePdfRequest` | Request PDF plan; stores lead |
+| `POST /api/waitlist` | `HandleWaitlist` | Waitlist signup; stores lead |
+
+**Flow:** Handler → **Calculator Service** (`internal/webapp_specifics/service/calculator.go`) → **Domain** (`repayment/v1`). Service maps API DTOs ↔ domain types, then returns JSON.
+
+**Persistence (webapp):** SQLC + PostgreSQL. Tables:
+
+- **calculation_sessions** — `session_id`, `engine_version` (session lifecycle).
+- **calculation_events** — `session_id`, `event_type`, `metadata` (JSONB) for analytics.
+- **calculation_session_metrics** — aggregated signals (runs, strategy switches, input changes, PDF/waitlist).
+- **lead_emails** — `email`, `source` (`waitlist` \| `pdf`), optional `session_id`.
+
+App API (debts, payments, dashboard, auth, workers) is implemented but currently **disabled** in `main.go` (commented out). When enabled, those use separate handlers, middleware (e.g. auth), and DB tables (e.g. `debts`, `payments_history`).
+
+### Frontend (Next.js)
+
+**Stack:** Next.js 16, React 19, Tailwind CSS 4. App router, no auth.
+
+**Structure:**
+
+```
+debtease-webapp/
+├── src/
+│   ├── app/
+│   │   ├── (marketing)/          # Marketing + calculators
+│   │   │   ├── page.tsx          # Landing
+│   │   │   ├── blog/
+│   │   │   └── calculator/       # Calculator hub
+│   │   │       ├── page.tsx      # Baseline vs Strategy links
+│   │   │       ├── baseline/     # Baseline calculator
+│   │   │       └── strategy/     # Strategy calculator
+│   │   └── layout.tsx
+│   ├── components/ui/            # Button, Card, Container, Footer, Navbar
+│   ├── features/calculator/      # LoanListEditor, ScheduleTable, SummaryCards, PdfModal
+│   ├── hooks/                    # e.g. useSessionID
+│   └── lib/
+│       ├── api.ts                # API client (calculate, events, waitlist, pdf)
+│       └── blog.ts
+```
+
+**API client (`lib/api.ts`):** `fetch` wrapper with `credentials: "include"`. Calls:
+
+- `calculateBaseline`, `calculateStrategy` → `/api/v1/calculate/baseline`, `/api/v1/calculate/strategy`
+- `createEvent` → `/api/events`
+- `submitWaitlistEmail` → `/api/waitlist`
+- `requestPdf` → `/api/pdf-request`
+
+**Next.js rewrites:** `/api/*` and `/api/v1/*` are proxied to `BACKEND_ORIGIN` (env, default `http://localhost:8080`). The webapp and Go server can run separately; frontend talks to backend via this proxy.
+
+**Calculators:** Two **independent** flows:
+
+1. **Baseline** — Add/edit loans → POST baseline → show summary + schedule table. Optional events when user changes inputs after a result.
+2. **Strategy** — Same loan inputs + strategy (Avalanche/Snowball) + monthly extra → POST strategy → show baseline vs strategy, delta (interest/months saved), schedule. Optional PDF request and waitlist.
+
+### Request Flow (Calculator)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Next
+    participant Backend
+    participant Domain
+    participant DB
+
+    User->>Next: Use calculator (baseline / strategy)
+    Next->>Next: Build request (loans, strategy, extra)
+    Next->>Backend: POST /api/v1/calculate/baseline | strategy
+    Backend->>Backend: Validate body, parse DTOs
+    Backend->>Domain: GeneratePortfolioSchedule / ApplyStrategy
+    Domain->>Domain: EMI, schedule, summary
+    Domain-->>Backend: schedule, summary
+    Backend->>Backend: Map to API response
+    Backend-->>Next: JSON (summary, schedule)
+    Next->>User: Render SummaryCards, ScheduleTable
+
+    opt Events / leads
+        Next->>Backend: POST /api/events | /api/waitlist | /api/pdf-request
+        Backend->>DB: calculation_events | lead_emails
+    end
+```
+
+### Webapp vs App API
+
+| Aspect | Webapp | App API |
+|--------|--------|---------|
+| **Auth** | None | JWT (login, refresh) |
+| **Domain** | `repayment/v1` (calculators) | Payments, accrual, statements, EMI workers |
+| **Storage** | Sessions, events, leads | Users, debts, credit_cards, payments_history |
+| **Clients** | Next.js webapp | Flutter app (future), other API clients |
+
+The **domain** is shared only in the sense that both use rigorous finance logic; the **repayment** engine is used by the webapp calculators. The **app** backend uses its own services (e.g. payment service, workers) and schema.
+
+### Technology Stack (Webapp)
+
+| Layer | Technologies |
+|-------|--------------|
+| **Domain** | Go (`internal/domain/repayment/v1`), no external deps |
+| **Backend** | Go 1.22+, `net/http` ServeMux, SQLC, PostgreSQL, Goose migrations |
+| **Frontend** | Next.js 16, React 19, Tailwind CSS 4, TypeScript |
+| **API contract** | JSON over HTTP; `lib/api.ts` types align with backend DTOs |
+
+---
+
 ## System Overview
 
 ```mermaid
