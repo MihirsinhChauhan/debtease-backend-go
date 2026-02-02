@@ -50,6 +50,9 @@ func main() {
 	if err != nil {
 		logger.Logger.Fatalw("Failed to open database", "error", err)
 	}
+	logger.Logger.Info("Database connection successful")
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
 	defer db.Close()
 
 	if err = db.Ping(); err != nil {
@@ -110,11 +113,11 @@ func main() {
 	})
 
 	// Static files with logging middleware
-	fileServer := http.FileServer(http.Dir("."))
-	mux.Handle("/app/", middleware.Logging(middleware.MetricsInc(cfg, http.StripPrefix("/app", fileServer))))
+	// fileServer := http.FileServer(http.Dir("."))
+	// mux.Handle("/app/", middleware.Logging(middleware.MetricsInc(cfg, http.StripPrefix("/app", fileServer))))
 
 	// Admin
-	mux.HandleFunc("GET /admin/metrics", handlers.HandleMetrics(cfg))
+	// mux.HandleFunc("GET /admin/metrics", handlers.HandleMetrics(cfg))
 	getAnalytics := webapp_handlers.HandleGetAnalytics(cfg)
 	mux.Handle("GET /api/admin/analytics", middleware.Logging( getAnalytics))
 
