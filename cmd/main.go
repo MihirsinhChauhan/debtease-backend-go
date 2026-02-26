@@ -5,7 +5,7 @@ import (
 	"DebtEase/internal/database"
 
 	// "DebtEase/internal/events"
-	// "DebtEase/internal/handlers"
+	"DebtEase/internal/handlers"
 	"DebtEase/internal/logger"
 	"DebtEase/internal/middleware"
 
@@ -38,10 +38,10 @@ func main() {
 		logger.Logger.Fatal("DB_URL not set in environment")
 	}
 
-	// jwtSecret := os.Getenv("JWT_SECRET")
-	// if jwtSecret == "" {
-	// 	logger.Logger.Fatal("JWT_SECRET is required in .env")
-	// }
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		logger.Logger.Fatal("JWT_SECRET is required in .env")
+	}
 
 	platform := os.Getenv("PLATFORM")
 
@@ -97,7 +97,7 @@ func main() {
 	cfg := &api.Config{
 		DB:          dbQueries,
 		Platform:    platform,
-		// JWTSecret:   jwtSecret,
+		JWTSecret:   jwtSecret,
 		// RabbitMQURL: rabbitmqURL,
 	}
 
@@ -121,52 +121,52 @@ func main() {
 	getAnalytics := webapp_handlers.HandleGetAnalytics(cfg)
 	mux.Handle("GET /api/admin/analytics", middleware.Logging( getAnalytics))
 
-	// // auth
-	// mux.HandleFunc("POST /api/login", handlers.HandleLogin(cfg))
-	// mux.HandleFunc("POST /api/register", handlers.HandleCreateUser(cfg))
-	// mux.HandleFunc("POST /api/refresh", handlers.HandleTokenRefresh(cfg))
-	// mux.HandleFunc("PUT /api/users", handlers.HandleUpdateUser(cfg))
+	// auth
+	mux.HandleFunc("POST /api/login", handlers.HandleLogin(cfg))
+	mux.HandleFunc("POST /api/register", handlers.HandleCreateUser(cfg))
+	mux.HandleFunc("POST /api/refresh", handlers.HandleTokenRefresh(cfg))
+	mux.HandleFunc("PUT /api/users", handlers.HandleUpdateUser(cfg))
 
-	// // dashboard (authenticated)
-	// getDashboard := handlers.HandleGetDashboard(cfg)
-	// mux.Handle("GET /api/dashboard", middleware.Logging(middleware.AuthRequired(cfg, getDashboard)))
+	// dashboard (authenticated)
+	getDashboard := handlers.HandleGetDashboard(cfg)
+	mux.Handle("GET /api/dashboard", middleware.Logging(middleware.AuthRequired(cfg, getDashboard)))
 
-	// // debts (authenticated)
-	// {
-	// 	// POST /api/debts
-	// 	createDebt := handlers.HandleCreateDebt(cfg)
-	// 	mux.Handle("POST /api/debts", middleware.Logging(middleware.AuthRequired(cfg, createDebt)))
+	// debts (authenticated)
+	{
+		// POST /api/debts
+		createDebt := handlers.HandleCreateDebt(cfg)
+		mux.Handle("POST /api/debts", middleware.Logging(middleware.AuthRequired(cfg, createDebt)))
 
-	// 	// GET /api/debts
-	// 	listDebts := handlers.HandleListDebts(cfg)
-	// 	mux.Handle("GET /api/debts", middleware.Logging(middleware.AuthRequired(cfg, listDebts)))
+		// GET /api/debts
+		listDebts := handlers.HandleListDebts(cfg)
+		mux.Handle("GET /api/debts", middleware.Logging(middleware.AuthRequired(cfg, listDebts)))
 
-	// 	// GET /api/debts/{id}
-	// 	getDebt := handlers.HandleGetDebt(cfg)
-	// 	mux.Handle("GET /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, getDebt)))
+		// GET /api/debts/{id}
+		getDebt := handlers.HandleGetDebt(cfg)
+		mux.Handle("GET /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, getDebt)))
 
-	// 	// PATCH /api/debts/{id}/balance
-	// 	updateBalance := handlers.HandleUpdateDebtBalance(cfg)
-	// 	mux.Handle("PATCH /api/debts/{id}/balance", middleware.Logging(middleware.AuthRequired(cfg, updateBalance)))
+		// PATCH /api/debts/{id}/balance
+		updateBalance := handlers.HandleUpdateDebtBalance(cfg)
+		mux.Handle("PATCH /api/debts/{id}/balance", middleware.Logging(middleware.AuthRequired(cfg, updateBalance)))
 
-	// 	// PATCH /api/debts/{id}/health
-	// 	updateHealth := handlers.HandleUpdateDebtHealth(cfg)
-	// 	mux.Handle("PATCH /api/debts/{id}/health", middleware.Logging(middleware.AuthRequired(cfg, updateHealth)))
+		// PATCH /api/debts/{id}/health
+		updateHealth := handlers.HandleUpdateDebtHealth(cfg)
+		mux.Handle("PATCH /api/debts/{id}/health", middleware.Logging(middleware.AuthRequired(cfg, updateHealth)))
 
-	// 	// POST /api/debts/{id}/overdue
-	// 	markOverdue := handlers.HandleMarkDebtOverdue(cfg)
-	// 	mux.Handle("POST /api/debts/{id}/overdue", middleware.Logging(middleware.AuthRequired(cfg, markOverdue)))
+		// POST /api/debts/{id}/overdue
+		markOverdue := handlers.HandleMarkDebtOverdue(cfg)
+		mux.Handle("POST /api/debts/{id}/overdue", middleware.Logging(middleware.AuthRequired(cfg, markOverdue)))
 
-	// 	// payments
-	// 	recordPayment := handlers.HandleRecordPayment(cfg, db)
-	// 	mux.Handle("POST /api/debts/{id}/payments", middleware.Logging(middleware.AuthRequired(cfg, recordPayment)))
-	// 	listPayments := handlers.HandleListPayments(cfg)
-	// 	mux.Handle("GET /api/debts/{id}/payments", middleware.Logging(middleware.AuthRequired(cfg, listPayments)))
+		// payments
+		recordPayment := handlers.HandleRecordPayment(cfg, db)
+		mux.Handle("POST /api/debts/{id}/payments", middleware.Logging(middleware.AuthRequired(cfg, recordPayment)))
+		listPayments := handlers.HandleListPayments(cfg)
+		mux.Handle("GET /api/debts/{id}/payments", middleware.Logging(middleware.AuthRequired(cfg, listPayments)))
 
-	// 	// // DELETE /api/debts/{id}
-	// 	// deleteDebt := handlers.HandleDeleteDebt(cfg)
-	// 	// mux.Handle("DELETE /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, deleteDebt)))
-	// }
+		// // DELETE /api/debts/{id}
+		// deleteDebt := handlers.HandleDeleteDebt(cfg)
+		// mux.Handle("DELETE /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, deleteDebt)))
+	}
 
 	// Webapp calculator endpoints (no auth required)
 	{
