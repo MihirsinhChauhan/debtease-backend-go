@@ -14,6 +14,51 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const attachLatestOrphanSnapshotBySessionToUser = `-- name: AttachLatestOrphanSnapshotBySessionToUser :one
+UPDATE financial_snapshots AS fs
+SET user_id = $1
+WHERE fs.id = (
+    SELECT fs2.id
+    FROM financial_snapshots AS fs2
+    WHERE fs2.session_id = $2
+      AND fs2.user_id IS NULL
+    ORDER BY fs2.created_at DESC
+    LIMIT 1
+)
+RETURNING fs.id, fs.user_id, fs.session_id, fs.snapshot_type, fs.snapshot_source, fs.monthly_income, fs.other_income, fs.fixed_expenses, fs.variable_expenses, fs.savings_cash, fs.investments_value, fs.total_monthly_emi, fs.total_debt_balance, fs.dependents_count, fs.trigger_event, fs.snapshot_version, fs.extra_data, fs.created_at
+`
+
+type AttachLatestOrphanSnapshotBySessionToUserParams struct {
+	UserID    uuid.NullUUID
+	SessionID uuid.NullUUID
+}
+
+func (q *Queries) AttachLatestOrphanSnapshotBySessionToUser(ctx context.Context, arg AttachLatestOrphanSnapshotBySessionToUserParams) (FinancialSnapshot, error) {
+	row := q.db.QueryRowContext(ctx, attachLatestOrphanSnapshotBySessionToUser, arg.UserID, arg.SessionID)
+	var i FinancialSnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.SessionID,
+		&i.SnapshotType,
+		&i.SnapshotSource,
+		&i.MonthlyIncome,
+		&i.OtherIncome,
+		&i.FixedExpenses,
+		&i.VariableExpenses,
+		&i.SavingsCash,
+		&i.InvestmentsValue,
+		&i.TotalMonthlyEmi,
+		&i.TotalDebtBalance,
+		&i.DependentsCount,
+		&i.TriggerEvent,
+		&i.SnapshotVersion,
+		&i.ExtraData,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getLatestSnapshotBySession = `-- name: GetLatestSnapshotBySession :one
 SELECT id, user_id, session_id, snapshot_type, snapshot_source, monthly_income, other_income, fixed_expenses, variable_expenses, savings_cash, investments_value, total_monthly_emi, total_debt_balance, dependents_count, trigger_event, snapshot_version, extra_data, created_at
 FROM financial_snapshots

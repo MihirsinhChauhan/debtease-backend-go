@@ -32,3 +32,16 @@ FROM financial_snapshots
 WHERE user_id = $1
 ORDER BY created_at DESC
 LIMIT 1;
+
+-- name: AttachLatestOrphanSnapshotBySessionToUser :one
+UPDATE financial_snapshots AS fs
+SET user_id = $1
+WHERE fs.id = (
+    SELECT fs2.id
+    FROM financial_snapshots AS fs2
+    WHERE fs2.session_id = $2
+      AND fs2.user_id IS NULL
+    ORDER BY fs2.created_at DESC
+    LIMIT 1
+)
+RETURNING fs.*;

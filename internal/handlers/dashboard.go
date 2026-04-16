@@ -2,13 +2,18 @@ package handlers
 
 import (
 	"DebtEase/internal/api"
+	health_v1 "DebtEase/internal/domain/health/v1"
 	"DebtEase/internal/logger"
 	"DebtEase/internal/models"
+	webapp_service "DebtEase/internal/webapp_specifics/service"
 	"DebtEase/internal/utils"
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
@@ -130,6 +135,28 @@ func HandleGetDashboard(cfg *api.Config) http.HandlerFunc {
 		response.PaymentHistory.PaidLast90Days = convertToDecimal(paymentHistory.PaidLast90Days)
 		response.PaymentHistory.PaidLastYear = convertToDecimal(paymentHistory.PaidLastYear)
 		response.PaymentHistory.PaymentsLast30Days = paymentHistory.PaymentsLast30Days
+
+		snap, err := cfg.DB.GetLatestSnapshotByUser(ctx, uuid.NullUUID{UUID: userID, Valid: true})
+		if err == nil {
+			hin, err2 := webapp_service.HealthInputFromFinancialSnapshot(snap)
+			if err2 == nil {
+				result := health_v1.Run(hin)
+				response.OnboardingHealth = &models.OnboardingHealthSnapshot{
+					SnapshotID:        snap.ID,
+					Status:            string(result.Status),
+					Score:             result.Score,
+					Drivers:           result.Drivers,
+					EMIRatio:          health_v1.ComputeEMIRatio(hin),
+					ShockBufferMonths: health_v1.ComputeShockBufferMonths(hin),
+					EngineVersion:     result.EngineVersion,
+					CapturedAt:        snap.CreatedAt,
+				}
+			} else {
+				logger.Logger.Warnw("HealthInputFromFinancialSnapshot failed for dashboard", "error", err2, "userID", userID)
+			}
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			logger.Logger.Warnw("GetLatestSnapshotByUser failed for dashboard", "error", err, "userID", userID)
+		}
 
 		utils.RespondWithJSON(w, http.StatusOK, response)
 	}

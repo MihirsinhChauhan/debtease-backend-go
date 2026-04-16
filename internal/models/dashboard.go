@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
@@ -15,6 +16,9 @@ type DashboardResponse struct {
 
 	// Debt Health
 	DebtHealth DebtHealth `json:"debt_health"`
+
+	// OnboardingHealth is recomputed from the latest financial_snapshots row (health_v1), when present.
+	OnboardingHealth *OnboardingHealthSnapshot `json:"onboarding_health,omitempty"`
 
 	// Expected Debt Free
 	ExpectedDebtFree *time.Time `json:"expected_debt_free,omitempty"`
@@ -31,6 +35,18 @@ type DashboardResponse struct {
 
 	// Payment History Summary
 	PaymentHistory PaymentHistorySummary `json:"payment_history"`
+}
+
+// OnboardingHealthSnapshot is aggregate onboarding debt health (distinct from portfolio-weighted DebtHealth).
+type OnboardingHealthSnapshot struct {
+	SnapshotID        uuid.UUID       `json:"snapshot_id"`
+	Status            string          `json:"status"`
+	Score             int             `json:"score"`
+	Drivers           []string        `json:"drivers"`
+	EMIRatio          decimal.Decimal `json:"emi_ratio"`
+	ShockBufferMonths decimal.Decimal `json:"shock_buffer_months"`
+	EngineVersion     string          `json:"engine_version"`
+	CapturedAt        time.Time       `json:"captured_at"`
 }
 
 type RepaymentProgress struct {

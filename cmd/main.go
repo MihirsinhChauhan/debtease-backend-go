@@ -131,6 +131,9 @@ func main() {
 	getDashboard := handlers.HandleGetDashboard(cfg)
 	mux.Handle("GET /api/dashboard", middleware.Logging(middleware.AuthRequired(cfg, getDashboard)))
 
+	snapshotAttach := handlers.HandleSnapshotAttach(cfg)
+	mux.Handle("POST /api/v1/snapshot/attach", middleware.Logging(middleware.AuthRequired(cfg, snapshotAttach)))
+
 	// debts (authenticated)
 	{
 		// POST /api/debts
@@ -187,6 +190,9 @@ func main() {
 
 		snapshotAnalyze := webapp_handlers.HandleSnapshotAnalyze(cfg)
 		mux.Handle("POST /api/v1/snapshot/analyze", middleware.Logging(snapshotAnalyze))
+
+		snapshotSimulateLoan := webapp_handlers.HandleSnapshotSimulateLoan(cfg)
+		mux.Handle("POST /api/v1/snapshot/simulate-loan", middleware.Logging(snapshotSimulateLoan))
 	}
 
 	// // Start workers
