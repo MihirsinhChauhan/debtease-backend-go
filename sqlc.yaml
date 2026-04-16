@@ -19,3 +19,20 @@ sql:
             go_type: github.com/shopspring/decimal.Decimal
           - column: debts.last_accrual_date
             go_type: time.Time
+          # financial_snapshots: nullable aggregates as decimal (avoid sql.NullString)
+          - column: "financial_snapshots.monthly_income"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - column: "financial_snapshots.other_income"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - column: "financial_snapshots.fixed_expenses"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - column: "financial_snapshots.variable_expenses"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - column: "financial_snapshots.savings_cash"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - column: "financial_snapshots.investments_value"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - column: "financial_snapshots.total_monthly_emi"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - column: "financial_snapshots.total_debt_balance"
+            go_type: "github.com/shopspring/decimal.Decimal"

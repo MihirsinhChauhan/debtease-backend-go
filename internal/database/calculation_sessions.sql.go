@@ -7,35 +7,45 @@ package database
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
 
 const createCalculationSession = `-- name: CreateCalculationSession :one
-INSERT INTO calculation_sessions (session_id, engine_version)
-VALUES ($1, $2)
-RETURNING id, session_id, engine_version, created_at
+INSERT INTO calculation_sessions (session_id, engine_version, user_id, entry_point)
+VALUES ($1, $2, $3, $4)
+RETURNING id, session_id, engine_version, created_at, user_id, entry_point
 `
 
 type CreateCalculationSessionParams struct {
 	SessionID     uuid.UUID
 	EngineVersion string
+	UserID        uuid.NullUUID
+	EntryPoint    sql.NullString
 }
 
 func (q *Queries) CreateCalculationSession(ctx context.Context, arg CreateCalculationSessionParams) (CalculationSession, error) {
-	row := q.db.QueryRowContext(ctx, createCalculationSession, arg.SessionID, arg.EngineVersion)
+	row := q.db.QueryRowContext(ctx, createCalculationSession,
+		arg.SessionID,
+		arg.EngineVersion,
+		arg.UserID,
+		arg.EntryPoint,
+	)
 	var i CalculationSession
 	err := row.Scan(
 		&i.ID,
 		&i.SessionID,
 		&i.EngineVersion,
 		&i.CreatedAt,
+		&i.UserID,
+		&i.EntryPoint,
 	)
 	return i, err
 }
 
 const getCalculationSessionByID = `-- name: GetCalculationSessionByID :one
-SELECT id, session_id, engine_version, created_at FROM calculation_sessions WHERE session_id = $1
+SELECT id, session_id, engine_version, created_at, user_id, entry_point FROM calculation_sessions WHERE session_id = $1
 `
 
 func (q *Queries) GetCalculationSessionByID(ctx context.Context, sessionID uuid.UUID) (CalculationSession, error) {
@@ -46,6 +56,8 @@ func (q *Queries) GetCalculationSessionByID(ctx context.Context, sessionID uuid.
 		&i.SessionID,
 		&i.EngineVersion,
 		&i.CreatedAt,
+		&i.UserID,
+		&i.EntryPoint,
 	)
 	return i, err
 }

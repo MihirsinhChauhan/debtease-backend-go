@@ -1,6 +1,6 @@
 -- name: CreateCalculationSession :one
-INSERT INTO calculation_sessions (session_id, engine_version)
-VALUES ($1, $2)
+INSERT INTO calculation_sessions (session_id, engine_version, user_id, entry_point)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetCalculationSessionByID :one

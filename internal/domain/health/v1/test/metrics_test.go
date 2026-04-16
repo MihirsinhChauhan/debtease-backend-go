@@ -255,3 +255,43 @@ func TestRun_ScoreClampedTo0(t *testing.T) {
 	}
 	hv1.AssertScoreInRange(result)
 }
+
+func TestDebtCount_AggregateOnly(t *testing.T) {
+	t.Parallel()
+	n := 4
+	input := hv1.HealthScoreInput{
+		MonthlyIncome:   testDec("100000"),
+		TotalMonthlyEMI: testDec("10000"),
+		ActiveDebtCount: &n,
+	}
+	if hv1.DebtCount(input) != 4 {
+		t.Fatalf("expected debt count 4 from ActiveDebtCount, got %d", hv1.DebtCount(input))
+	}
+}
+
+func TestComputeUnsecuredRatio_AggregateOnly(t *testing.T) {
+	t.Parallel()
+	r := decimal.RequireFromString("0.55")
+	input := hv1.HealthScoreInput{
+		MonthlyIncome:     testDec("100000"),
+		TotalMonthlyEMI:   testDec("20000"),
+		UnsecuredEmiRatio: &r,
+	}
+	got := hv1.ComputeUnsecuredRatio(input)
+	if !got.Equal(r) {
+		t.Fatalf("expected aggregate ratio 0.55, got %s", got.String())
+	}
+}
+
+func TestComputeUnsecuredRatio_AggregateOnly_ClampedHigh(t *testing.T) {
+	t.Parallel()
+	r := decimal.RequireFromString("1.5")
+	input := hv1.HealthScoreInput{
+		UnsecuredEmiRatio: &r,
+	}
+	got := hv1.ComputeUnsecuredRatio(input)
+	one := decimal.RequireFromString("1")
+	if !got.Equal(one) {
+		t.Fatalf("expected ratio clamped to 1, got %s", got.String())
+	}
+}

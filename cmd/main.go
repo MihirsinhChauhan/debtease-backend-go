@@ -168,7 +168,7 @@ func main() {
 		// mux.Handle("DELETE /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, deleteDebt)))
 	}
 
-	// Webapp calculator endpoints (no auth required)
+	// Webapp
 	{
 		baselineCalculate := webapp_handlers.HandleBaselineCalculate(cfg)
 		mux.Handle("POST /api/v1/calculate/baseline", middleware.Logging(baselineCalculate))
@@ -184,6 +184,9 @@ func main() {
 
 		waitlist := webapp_handlers.HandleWaitlist(cfg)
 		mux.Handle("POST /api/waitlist", middleware.Logging(waitlist))
+
+		snapshotAnalyze := webapp_handlers.HandleSnapshotAnalyze(cfg)
+		mux.Handle("POST /api/v1/snapshot/analyze", middleware.Logging(snapshotAnalyze))
 	}
 
 	// // Start workers

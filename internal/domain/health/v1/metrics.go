@@ -17,22 +17,42 @@ func ComputeShockBufferMonths(input HealthScoreInput) decimal.Decimal {
 
 // DebtCount returns the number of active debts (fragmentation).
 func DebtCount(input HealthScoreInput) int {
-	return len(input.Debts)
+	if len(input.Debts) > 0 {
+		return len(input.Debts)
+	}
+	if input.ActiveDebtCount != nil {
+		return *input.ActiveDebtCount
+	}
+	return 0
 }
 
 // ComputeUnsecuredRatio returns Unsecured_EMI / Total_EMI (0–1) from debt portfolio.
+// When Debts is empty, uses UnsecuredEmiRatio if set (aggregate-only onboarding).
 func ComputeUnsecuredRatio(input HealthScoreInput) decimal.Decimal {
-	var total, unsecured decimal.Decimal
-	for _, d := range input.Debts {
-		total = total.Add(d.EMI)
-		if !d.Secured {
-			unsecured = unsecured.Add(d.EMI)
+	if len(input.Debts) > 0 {
+		var total, unsecured decimal.Decimal
+		for _, d := range input.Debts {
+			total = total.Add(d.EMI)
+			if !d.Secured {
+				unsecured = unsecured.Add(d.EMI)
+			}
 		}
+		if total.IsZero() {
+			return decimalZero
+		}
+		return ratio(unsecured, total)
 	}
-	if total.IsZero() {
-		return decimalZero
+	if input.UnsecuredEmiRatio != nil {
+		r := *input.UnsecuredEmiRatio
+		if r.LessThan(decimalZero) {
+			return decimalZero
+		}
+		if r.GreaterThan(decimalOne) {
+			return decimalOne
+		}
+		return r
 	}
-	return ratio(unsecured, total)
+	return decimalZero
 }
 
 // PenaltyEMIRatio returns the penalty (0, 10, or 25) for EMI ratio band.

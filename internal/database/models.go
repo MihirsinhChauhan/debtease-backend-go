@@ -25,6 +25,10 @@ const (
 	DebtTypeMortgage     DebtType = "mortgage"
 	DebtTypeMedical      DebtType = "medical"
 	DebtTypeOther        DebtType = "other"
+	DebtTypeHomeLoan     DebtType = "home_loan"
+	DebtTypeCarLoan      DebtType = "car_loan"
+	DebtTypeConsumerEmi  DebtType = "consumer_emi"
+	DebtTypeBnpl         DebtType = "bnpl"
 )
 
 func (e *DebtType) Scan(src interface{}) error {
@@ -205,6 +209,9 @@ type CalculationSession struct {
 	SessionID     uuid.UUID
 	EngineVersion string
 	CreatedAt     time.Time
+	UserID        uuid.NullUUID
+	// Funnel entry: debt_health, loan_test, landing
+	EntryPoint sql.NullString
 }
 
 type CalculationSessionMetric struct {
@@ -263,6 +270,27 @@ type Debt struct {
 	MonthsPaid         sql.NullInt32
 	MoratoriumUntil    sql.NullTime
 	InMoratorium       sql.NullBool
+}
+
+type FinancialSnapshot struct {
+	ID               uuid.UUID
+	UserID           uuid.NullUUID
+	SessionID        uuid.NullUUID
+	SnapshotType     string
+	SnapshotSource   string
+	MonthlyIncome    decimal.Decimal
+	OtherIncome      decimal.Decimal
+	FixedExpenses    decimal.Decimal
+	VariableExpenses decimal.Decimal
+	SavingsCash      decimal.Decimal
+	InvestmentsValue decimal.Decimal
+	TotalMonthlyEmi  decimal.Decimal
+	TotalDebtBalance decimal.Decimal
+	DependentsCount  sql.NullInt32
+	TriggerEvent     sql.NullString
+	SnapshotVersion  int32
+	ExtraData        json.RawMessage
+	CreatedAt        time.Time
 }
 
 type LeadEmail struct {

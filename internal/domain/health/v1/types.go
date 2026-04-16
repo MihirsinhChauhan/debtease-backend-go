@@ -23,20 +23,23 @@ type HealthDebtEntry struct {
 // Built from financial snapshot aggregates + debt portfolio.
 type HealthScoreInput struct {
 	// From snapshot
-	MonthlyIncome     decimal.Decimal
-	FixedExpenses     decimal.Decimal
-	VariableExpenses  decimal.Decimal
-	SavingsCash       decimal.Decimal
-	InvestmentsValue  decimal.Decimal
-	TotalMonthlyEMI   decimal.Decimal
+	MonthlyIncome    decimal.Decimal
+	FixedExpenses    decimal.Decimal
+	VariableExpenses decimal.Decimal
+	SavingsCash      decimal.Decimal
+	InvestmentsValue decimal.Decimal
+	TotalMonthlyEMI  decimal.Decimal
 	// From debt portfolio (for fragmentation + unsecured ratio)
 	Debts []HealthDebtEntry
+	// When Debts is empty, aggregate-only onboarding can supply these instead.
+	ActiveDebtCount   *int
+	UnsecuredEmiRatio *decimal.Decimal // 0–1 of total EMI that is unsecured
 }
 
 // HealthScoreResult is the deterministic output of the health score engine.
 type HealthScoreResult struct {
-	Score         int           // 0–100
+	Score         int // 0–100
 	Status        HealthStatus
-	Drivers       []string      // explainability
+	Drivers       []string // explainability
 	EngineVersion string
 }

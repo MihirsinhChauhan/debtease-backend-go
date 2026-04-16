@@ -21,6 +21,10 @@ var allowedEventTypes = map[string]bool{
 	"input_modified_after_result": true,
 	"pdf_requested":               true,
 	"email_submitted":             true,
+	"financial_snapshot_submitted": true,
+	"debt_health_viewed":          true,
+	"loan_simulation_started":     true,
+	"signup_triggered":            true,
 }
 
 func EmitEvent(ctx context.Context, db *database.Queries, sessionID uuid.UUID, eventType string, metadata map[string]interface{}) error {
