@@ -20,6 +20,9 @@ type DashboardResponse struct {
 	// OnboardingHealth is recomputed from the latest financial_snapshots row (health_v1), when present.
 	OnboardingHealth *OnboardingHealthSnapshot `json:"onboarding_health,omitempty"`
 
+	// FinancialSnapshotForSimulation matches POST /api/v1/snapshot/simulate-loan "snapshot" body (when user has a linked snapshot).
+	FinancialSnapshotForSimulation *FinancialSnapshotForSimulation `json:"financial_snapshot_for_simulation,omitempty"`
+
 	// Expected Debt Free
 	ExpectedDebtFree *time.Time `json:"expected_debt_free,omitempty"`
 	MonthsToDebtFree *int32     `json:"months_to_debt_free,omitempty"`
@@ -35,6 +38,18 @@ type DashboardResponse struct {
 
 	// Payment History Summary
 	PaymentHistory PaymentHistorySummary `json:"payment_history"`
+}
+
+// FinancialSnapshotForSimulation is aggregate onboarding inputs for loan impact simulation (aligned with SnapshotInlineForSim in the webapp API).
+type FinancialSnapshotForSimulation struct {
+	MonthlyIncome     decimal.Decimal  `json:"monthly_income"`
+	FixedExpenses     decimal.Decimal  `json:"fixed_expenses"`
+	VariableExpenses  *decimal.Decimal `json:"variable_expenses,omitempty"`
+	TotalMonthlyEMI   decimal.Decimal  `json:"total_monthly_emi"`
+	SavingsCash       *decimal.Decimal `json:"savings_cash,omitempty"`
+	InvestmentsValue  *decimal.Decimal `json:"investments_value,omitempty"`
+	ActiveDebtCount   int              `json:"active_debt_count"`
+	UnsecuredEmiRatio *decimal.Decimal `json:"unsecured_emi_ratio,omitempty"`
 }
 
 // OnboardingHealthSnapshot is aggregate onboarding debt health (distinct from portfolio-weighted DebtHealth).

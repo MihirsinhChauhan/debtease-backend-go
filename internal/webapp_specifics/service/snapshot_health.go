@@ -5,6 +5,7 @@ import (
 
 	"DebtEase/internal/database"
 	health_v1 "DebtEase/internal/domain/health/v1"
+	"DebtEase/internal/models"
 
 	"github.com/shopspring/decimal"
 )
@@ -42,6 +43,38 @@ func HealthInputFromFinancialSnapshot(snap database.FinancialSnapshot) (health_v
 		ActiveDebtCount:   &active,
 		UnsecuredEmiRatio: unsecuredPtr,
 	}, nil
+}
+
+// FinancialSnapshotForSimulationFromDB maps a persisted row to the dashboard / simulate-loan inline snapshot shape.
+func FinancialSnapshotForSimulationFromDB(snap database.FinancialSnapshot) (*models.FinancialSnapshotForSimulation, error) {
+	hin, err := HealthInputFromFinancialSnapshot(snap)
+	if err != nil {
+		return nil, err
+	}
+	active := 0
+	if hin.ActiveDebtCount != nil {
+		active = *hin.ActiveDebtCount
+	}
+	out := models.FinancialSnapshotForSimulation{
+		MonthlyIncome:     hin.MonthlyIncome,
+		FixedExpenses:     hin.FixedExpenses,
+		TotalMonthlyEMI:   hin.TotalMonthlyEMI,
+		ActiveDebtCount:   active,
+		UnsecuredEmiRatio: hin.UnsecuredEmiRatio,
+	}
+	if !hin.VariableExpenses.IsZero() {
+		v := hin.VariableExpenses
+		out.VariableExpenses = &v
+	}
+	if !hin.SavingsCash.IsZero() {
+		v := hin.SavingsCash
+		out.SavingsCash = &v
+	}
+	if !hin.InvestmentsValue.IsZero() {
+		v := hin.InvestmentsValue
+		out.InvestmentsValue = &v
+	}
+	return &out, nil
 }
 
 // HealthInputFromInlineSnapshot maps aggregate fields (API body) to health_v1 input.

@@ -151,6 +151,11 @@ func HandleGetDashboard(cfg *api.Config) http.HandlerFunc {
 					EngineVersion:     result.EngineVersion,
 					CapturedAt:        snap.CreatedAt,
 				}
+				if inline, err3 := webapp_service.FinancialSnapshotForSimulationFromDB(snap); err3 == nil {
+					response.FinancialSnapshotForSimulation = inline
+				} else {
+					logger.Logger.Warnw("FinancialSnapshotForSimulationFromDB failed for dashboard", "error", err3, "userID", userID)
+				}
 			} else {
 				logger.Logger.Warnw("HealthInputFromFinancialSnapshot failed for dashboard", "error", err2, "userID", userID)
 			}

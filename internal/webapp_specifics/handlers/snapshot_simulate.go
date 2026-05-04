@@ -4,6 +4,7 @@ import (
 	"DebtEase/internal/api"
 	health_v1 "DebtEase/internal/domain/health/v1"
 	repayment_v1 "DebtEase/internal/domain/repayment/v1"
+	stress_v1 "DebtEase/internal/domain/stress/v1"
 	"DebtEase/internal/logger"
 	"DebtEase/internal/utils"
 	webapp_models "DebtEase/internal/webapp_specifics/models"
@@ -185,6 +186,19 @@ func HandleSnapshotSimulateLoan(cfg *api.Config) http.HandlerFunc {
 		afterResult := health_v1.Run(afterIn)
 		afterBlock := healthBlockFromResult(afterIn, afterResult)
 
+		baseFixed := base.FixedExpenses.Add(base.VariableExpenses)
+		afterFixed := afterIn.FixedExpenses.Add(afterIn.VariableExpenses)
+		beforeCur, beforeS10, beforeS20 := stress_v1.FlexibilityBuffersForIncomeShocks(
+			base.MonthlyIncome, baseFixed, base.TotalMonthlyEMI,
+		)
+		afterCur, afterS10, afterS20 := stress_v1.FlexibilityBuffersForIncomeShocks(
+			afterIn.MonthlyIncome, afterFixed, afterIn.TotalMonthlyEMI,
+		)
+		worstMonths := stress_v1.WorstSurvivabilityMonthsAcrossIncomeShocks(
+			afterIn.MonthlyIncome, afterFixed, afterIn.TotalMonthlyEMI,
+		)
+		survBand := stress_v1.ComputeSurvivabilityBand(worstMonths, stress_v1.DefaultStressPolicy())
+
 		if err := webapp_service.EmitEvent(ctx, cfg.DB, sessionID, "loan_simulation_started", map[string]interface{}{
 			"loan_type":            lt,
 			"principal":            req.Principal.String(),
@@ -206,6 +220,23 @@ func HandleSnapshotSimulateLoan(cfg *api.Config) http.HandlerFunc {
 			NewLoanEMIMonthly: newEMI,
 			LoanType:          lt,
 			EngineVersion:     afterResult.EngineVersion,
+			Visual: webapp_models.SnapshotSimulateLoanVisual{
+				Buffers: webapp_models.SnapshotSimulateLoanBuffers{
+					Current: afterCur,
+					Shock10: afterS10,
+					Shock20: afterS20,
+				},
+				BuffersBefore: webapp_models.SnapshotSimulateLoanBuffers{
+					Current: beforeCur,
+					Shock10: beforeS10,
+					Shock20: beforeS20,
+				},
+			},
+			SurvivabilityBand: string(survBand),
+			Delta: webapp_models.SnapshotSimulateLoanDelta{
+				StressLevelChange: beforeBlock.Status != afterBlock.Status,
+				BufferDrop:        afterCur.LessThan(beforeCur),
+			},
 		})
 	}
 }

@@ -63,6 +63,25 @@ type SnapshotHealthBlock struct {
 	EngineVersion     string          `json:"engine_version"`
 }
 
+// SnapshotSimulateLoanBuffers is monthly flexibility at full income, −10%, and −20% income (post-loan state).
+type SnapshotSimulateLoanBuffers struct {
+	Current decimal.Decimal `json:"current"`
+	Shock10 decimal.Decimal `json:"shock_10"`
+	Shock20 decimal.Decimal `json:"shock_20"`
+}
+
+// SnapshotSimulateLoanVisual supports shock-impact UI (buffers only; no chart axes in product).
+type SnapshotSimulateLoanVisual struct {
+	Buffers       SnapshotSimulateLoanBuffers `json:"buffers"`
+	BuffersBefore SnapshotSimulateLoanBuffers `json:"buffers_before"`
+}
+
+// SnapshotSimulateLoanDelta flags material changes from adding the hypothetical loan.
+type SnapshotSimulateLoanDelta struct {
+	StressLevelChange bool `json:"stress_level_change"`
+	BufferDrop        bool `json:"buffer_drop"`
+}
+
 // SnapshotSimulateLoanResponse is before/after debt health for a hypothetical new loan EMI.
 type SnapshotSimulateLoanResponse struct {
 	Before            SnapshotHealthBlock `json:"before"`
@@ -70,4 +89,7 @@ type SnapshotSimulateLoanResponse struct {
 	NewLoanEMIMonthly decimal.Decimal     `json:"new_loan_emi_monthly"`
 	LoanType          string              `json:"loan_type"`
 	EngineVersion     string              `json:"engine_version"`
+	Visual            SnapshotSimulateLoanVisual `json:"visual"`
+	SurvivabilityBand string                     `json:"survivability_band"`
+	Delta             SnapshotSimulateLoanDelta  `json:"delta"`
 }

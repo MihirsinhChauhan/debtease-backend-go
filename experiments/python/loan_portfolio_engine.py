@@ -20,6 +20,8 @@ class Loan:
     annual_rate: float
     tenure_months: int
     moratorium_months: int = 0
+    instrument_type: str = "other"  # bnpl, personal_loan, mortgage, etc.
+    secured: bool = False           # True for secured loans like mortgage
 
 
 # ---------------- CORE MATH ---------------- #
