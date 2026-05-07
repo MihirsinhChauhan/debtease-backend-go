@@ -7,7 +7,7 @@ import (
 	"DebtEase/internal/logger"
 	"DebtEase/internal/models"
 	"DebtEase/internal/utils"
-	"DebtEase/internal/events"
+	// "DebtEase/internal/events"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -46,7 +46,10 @@ func HandleCreateUser(cfg *api.Config) http.HandlerFunc {
 		if req.Password == "" {
 			logger.Logger.Warnw("Empty Password Supplied")
 			utils.RespondWithError(w, http.StatusBadRequest, "Password is required")
+			return
 		}
+
+		name := strings.TrimSpace(req.Name)
 
 		hash, err := auth.HashPassword(req.Password)
 
@@ -58,6 +61,7 @@ func HandleCreateUser(cfg *api.Config) http.HandlerFunc {
 
 		ctx := context.Background()
 		user, err := cfg.DB.CreateUser(ctx, database.CreateUserParams{
+			Name:         name,
 			Email:        req.Email,
 			PasswordHash: hash,
 		})
@@ -76,22 +80,23 @@ func HandleCreateUser(cfg *api.Config) http.HandlerFunc {
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create user")
 			return
 		}
-			// Publish user registered event (non-blocking, fire-and-forget)
-		go func() {
-			event := events.NewUserRegisteredEvent(
-				user.ID,
-				user.Email,
-				user.Name,
-				user.CreatedAt,
-			)
-			if err := events.PublishEvent(cfg.RabbitMQURL, events.ExchangeNotifications, events.RoutingUserRegistered, event); err != nil {
-				logger.Logger.Warnw("Failed to publish user registered event (non-critical)", 
-					"error", err,
-					"user_id", user.ID)
-			}
-		}()
+		// 	// Publish user registered event (non-blocking, fire-and-forget)
+		// go func() {
+		// 	event := events.NewUserRegisteredEvent(
+		// 		user.ID,
+		// 		user.Email,
+		// 		user.Name,
+		// 		user.CreatedAt,
+		// 	)
+		// 	if err := events.PublishEvent(cfg.RabbitMQURL, events.ExchangeNotifications, events.RoutingUserRegistered, event); err != nil {
+		// 		logger.Logger.Warnw("Failed to publish user registered event (non-critical)",
+		// 			"error", err,
+		// 			"user_id", user.ID)
+		// 	}
+		// }()
 		resp := models.CreateUserResponse{
 			ID:        user.ID,
+			Name:      user.Name,
 			Email:     user.Email,
 			CreatedAt: user.CreatedAt.Format(time.RFC3339),
 			UpdatedAt: user.UpdatedAt.Format(time.RFC3339),

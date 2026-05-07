@@ -45,7 +45,7 @@ func HandleBaselineCalculate(cfg *api.Config) http.HandlerFunc {
 		}
 
 		// Get or create session
-		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion)
+		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion, nil)
 		if err != nil {
 			logger.Logger.Errorw("Failed to get or create session", "error", err)
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to process session")
@@ -121,7 +121,7 @@ func HandleStrategyCalculate(cfg *api.Config) http.HandlerFunc {
 		}
 
 		// Get or create session
-		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion)
+		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion, nil)
 		if err != nil {
 			logger.Logger.Errorw("Failed to get or create session", "error", err)
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to process session")

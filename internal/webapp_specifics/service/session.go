@@ -4,17 +4,22 @@ import (
 	"DebtEase/internal/database"
 	"DebtEase/internal/logger"
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
 
-func GetOrCreateSession(ctx context.Context, db *database.Queries, sessionID uuid.UUID, engineVersion string) (uuid.UUID, error) {
+// SessionMeta is optional funnel metadata stored when creating a new calculation session.
+type SessionMeta struct {
+	EntryPoint string
+	UserID     uuid.UUID
+}
+
+func GetOrCreateSession(ctx context.Context, db *database.Queries, sessionID uuid.UUID, engineVersion string, meta *SessionMeta) (uuid.UUID, error) {
 	if sessionID == uuid.Nil {
-		// Generate new session ID
 		sessionID = uuid.New()
 	}
 
-	// Check if session exists
 	exists, err := db.SessionExists(ctx, sessionID)
 	if err != nil {
 		logger.Logger.Errorw("Failed to check session existence", "error", err)
@@ -22,13 +27,24 @@ func GetOrCreateSession(ctx context.Context, db *database.Queries, sessionID uui
 	}
 
 	if !exists {
-		// Create new session
 		if engineVersion == "" {
 			engineVersion = "v1"
+		}
+		var uid uuid.NullUUID
+		var ep sql.NullString
+		if meta != nil {
+			if meta.UserID != uuid.Nil {
+				uid = uuid.NullUUID{UUID: meta.UserID, Valid: true}
+			}
+			if meta.EntryPoint != "" {
+				ep = sql.NullString{String: meta.EntryPoint, Valid: true}
+			}
 		}
 		_, err := db.CreateCalculationSession(ctx, database.CreateCalculationSessionParams{
 			SessionID:     sessionID,
 			EngineVersion: engineVersion,
+			UserID:        uid,
+			EntryPoint:    ep,
 		})
 		if err != nil {
 			logger.Logger.Errorw("Failed to create calculation session", "error", err, "session_id", sessionID)
