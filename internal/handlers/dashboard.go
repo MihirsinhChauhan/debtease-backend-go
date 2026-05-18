@@ -5,8 +5,9 @@ import (
 	health_v1 "DebtEase/internal/domain/health/v1"
 	"DebtEase/internal/logger"
 	"DebtEase/internal/models"
-	webapp_service "DebtEase/internal/webapp_specifics/service"
+	"DebtEase/internal/projections"
 	"DebtEase/internal/utils"
+	webapp_service "DebtEase/internal/webapp_specifics/service"
 	"context"
 	"database/sql"
 	"errors"
@@ -136,10 +137,18 @@ func HandleGetDashboard(cfg *api.Config) http.HandlerFunc {
 		response.PaymentHistory.PaidLastYear = convertToDecimal(paymentHistory.PaidLastYear)
 		response.PaymentHistory.PaymentsLast30Days = paymentHistory.PaymentsLast30Days
 
+		rollup, rollupErr := cfg.DB.GetPortfolioRollupForUser(ctx, userID)
+		if rollupErr != nil {
+			logger.Logger.Warnw("GetPortfolioRollupForUser failed for dashboard", "error", rollupErr, "userID", userID)
+		}
+
 		snap, err := cfg.DB.GetLatestSnapshotByUser(ctx, uuid.NullUUID{UUID: userID, Valid: true})
 		if err == nil {
 			hin, err2 := webapp_service.HealthInputFromFinancialSnapshot(snap)
 			if err2 == nil {
+				if rollupErr == nil {
+					hin = projections.MergePortfolioRollupIntoHealthInput(hin, rollup)
+				}
 				result := health_v1.Run(hin)
 				response.OnboardingHealth = &models.OnboardingHealthSnapshot{
 					SnapshotID:        snap.ID,
@@ -151,11 +160,7 @@ func HandleGetDashboard(cfg *api.Config) http.HandlerFunc {
 					EngineVersion:     result.EngineVersion,
 					CapturedAt:        snap.CreatedAt,
 				}
-				if inline, err3 := webapp_service.FinancialSnapshotForSimulationFromDB(snap); err3 == nil {
-					response.FinancialSnapshotForSimulation = inline
-				} else {
-					logger.Logger.Warnw("FinancialSnapshotForSimulationFromDB failed for dashboard", "error", err3, "userID", userID)
-				}
+				response.FinancialSnapshotForSimulation = projections.FinancialSimulationFromMergedHealthInput(hin)
 			} else {
 				logger.Logger.Warnw("HealthInputFromFinancialSnapshot failed for dashboard", "error", err2, "userID", userID)
 			}

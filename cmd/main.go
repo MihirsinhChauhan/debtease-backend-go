@@ -95,9 +95,10 @@ func main() {
 
 	// Initialize config
 	cfg := &api.Config{
-		DB:          dbQueries,
-		Platform:    platform,
-		JWTSecret:   jwtSecret,
+		DB:        dbQueries,
+		DBPool:    db,
+		Platform:  platform,
+		JWTSecret: jwtSecret,
 		// RabbitMQURL: rabbitmqURL,
 	}
 
@@ -119,7 +120,7 @@ func main() {
 	// Admin
 	// mux.HandleFunc("GET /admin/metrics", handlers.HandleMetrics(cfg))
 	getAnalytics := webapp_handlers.HandleGetAnalytics(cfg)
-	mux.Handle("GET /api/admin/analytics", middleware.Logging( getAnalytics))
+	mux.Handle("GET /api/admin/analytics", middleware.Logging(getAnalytics))
 
 	// auth
 	mux.HandleFunc("POST /api/login", handlers.HandleLogin(cfg))
@@ -130,6 +131,12 @@ func main() {
 	// dashboard (authenticated)
 	getDashboard := handlers.HandleGetDashboard(cfg)
 	mux.Handle("GET /api/dashboard", middleware.Logging(middleware.AuthRequired(cfg, getDashboard)))
+
+	listMyFinancialEvents := handlers.HandleListMyFinancialEvents(cfg)
+	mux.Handle("GET /api/users/me/financial-events", middleware.Logging(middleware.AuthRequired(cfg, listMyFinancialEvents)))
+
+	listRecentPayments := handlers.HandleListRecentPayments(cfg)
+	mux.Handle("GET /api/payments/recent", middleware.Logging(middleware.AuthRequired(cfg, listRecentPayments)))
 
 	snapshotAttach := handlers.HandleSnapshotAttach(cfg)
 	mux.Handle("POST /api/v1/snapshot/attach", middleware.Logging(middleware.AuthRequired(cfg, snapshotAttach)))
@@ -197,9 +204,9 @@ func main() {
 
 	// // Start workers
 	// ctx := context.Background()
-	// worker.StartDailyAccrual(ctx, dbQueries, 24*time.Hour)              // Daily interest accrual for credit cards
-	// worker.StartCreditCardStatementWorker(ctx, dbQueries, 24*time.Hour) // Credit card statement generation
-	// worker.StartLoanEMIWorker(ctx, dbQueries, 24*time.Hour)             // Loan EMI processing
+	// worker.StartDailyAccrual(ctx, db, dbQueries, 24*time.Hour)              // Daily interest accrual for credit cards
+	// worker.StartCreditCardStatementWorker(ctx, db, dbQueries, 24*time.Hour) // Credit card statement generation
+	// worker.StartLoanEMIWorker(ctx, db, dbQueries, 24*time.Hour)           // Loan EMI processing
 
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)

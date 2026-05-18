@@ -272,6 +272,20 @@ type Debt struct {
 	InMoratorium       sql.NullBool
 }
 
+type FinancialEvent struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	EventType     string
+	EntityType    string
+	EntityID      uuid.NullUUID
+	Amount        sql.NullString
+	Currency      string
+	OccurredAt    time.Time
+	Metadata      json.RawMessage
+	CreatedAt     time.Time
+	SchemaVersion int16
+}
+
 type FinancialSnapshot struct {
 	ID               uuid.UUID
 	UserID           uuid.NullUUID

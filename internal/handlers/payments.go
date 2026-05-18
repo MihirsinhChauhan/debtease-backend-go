@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -178,6 +179,70 @@ func HandleListPayments(cfg *api.Config) http.HandlerFunc {
 			out = append(out, models.PaymentResponse{
 				ID:               p.ID.String(),
 				DebtID:           p.DebtID.String(),
+				Amount:           p.Amount,
+				PaymentDate:      p.PaymentDate.Format("2006-01-02"),
+				Type:             string(p.Type),
+				Notes:            toPtrIfValid(p.Notes),
+				PrincipalApplied: p.PrincipalApplied,
+				InterestApplied:  p.InterestApplied,
+				PaymentMethod:    toPtrIfValid(p.PaymentMethod),
+				CreatedAt:        firstValidTime(p.CreatedAt, time.Now()),
+			})
+		}
+		utils.RespondWithJSON(w, http.StatusOK, out)
+	}
+}
+
+func HandleListRecentPayments(cfg *api.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := getUserIDFromContext(r.Context())
+		if !ok {
+			utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+
+		ctx := context.Background()
+
+		since := time.Now().UTC().AddDate(-1, 0, 0)
+		if raw := r.URL.Query().Get("since"); raw != "" {
+			t, err := time.Parse("2006-01-02", raw)
+			if err != nil {
+				utils.RespondWithError(w, http.StatusBadRequest, "Invalid since (use YYYY-MM-DD)")
+				return
+			}
+			since = t.UTC()
+		}
+
+		limit := 200
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 1 || n > 500 {
+				utils.RespondWithError(w, http.StatusBadRequest, "limit must be 1–500")
+				return
+			}
+			limit = n
+		}
+
+		items, err := cfg.DB.GetRecentPayments(ctx, database.GetRecentPaymentsParams{
+			PaymentDate: since,
+			UserID:      userID,
+		})
+		if err != nil {
+			logger.Logger.Errorw("GetRecentPayments failed", "error", err)
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to list payments")
+			return
+		}
+
+		if len(items) > limit {
+			items = items[:limit]
+		}
+
+		out := make([]models.RecentPaymentResponse, 0, len(items))
+		for _, p := range items {
+			out = append(out, models.RecentPaymentResponse{
+				ID:               p.ID.String(),
+				DebtID:           p.DebtID.String(),
+				DebtName:         p.DebtName,
 				Amount:           p.Amount,
 				PaymentDate:      p.PaymentDate.Format("2006-01-02"),
 				Type:             string(p.Type),
