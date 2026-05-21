@@ -3,11 +3,17 @@ INSERT INTO debts (
   user_id, name, type, lender, principal_decimal,
   outstanding_balance, interest_rate, min_payment,
   due_date, payment_frequency, debt_taken,
-  risk_level, priority, notes,
-  payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
+  priority, notes,
+  payment_due_day, moratorium_until, in_moratorium,
+  instrument_type, interest_model,
+  monthly_obligation, minimum_obligation, remaining_months, due_day,
+  is_secured, is_revolving, is_short_term, is_interest_bearing,
+  fragmentation_weight, stress_priority,
+  treatment_classification, engine_version, policy_version, extra_metadata
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-  $15, $16, $17, $18, $19, $20
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+  $12, $13, $14, $15, $16,
+  $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
 )
 RETURNING *;
 
@@ -71,62 +77,58 @@ SELECT *
 FROM debts
 WHERE outstanding_balance > 0 OR accrued_interest > 0;
 
--- name: UpdateLoanPayment :exec
+-- name: DecrementRemainingMonthsAfterEMI :exec
 UPDATE debts
-SET months_paid = months_paid + 1,
-	updated_at = now()
+SET remaining_months = CASE
+        WHEN remaining_months IS NOT NULL AND remaining_months > 0 THEN remaining_months - 1
+        ELSE remaining_months
+    END,
+    updated_at = now()
 WHERE id = $1;
 
 -- name: ExitMoratorium :exec
 UPDATE debts
 SET in_moratorium = FALSE,
-	emi_amount = $2,
-	updated_at = now()
+    monthly_obligation = $2,
+    updated_at = now()
 WHERE id = $1;
 
 -- name: ListLoansNeedingEMI :many
 SELECT *
 FROM debts
-WHERE type IN ('personal_loan', 'student_loan', 'mortgage')
-	AND payment_due_day IS NOT NULL
-	AND outstanding_balance > 0
-	AND EXTRACT(DAY FROM CURRENT_DATE) = payment_due_day;
-
-
+WHERE type NOT IN ('credit_card', 'bnpl')
+  AND interest_model IS DISTINCT FROM 'revolving'::interest_model
+  AND payment_due_day IS NOT NULL
+  AND outstanding_balance > 0
+  AND EXTRACT(DAY FROM CURRENT_DATE) = payment_due_day;
 
 -- name: GetDebtBreakdownByType :many
--- Breakdown of debts by type for visualization
-SELECT 
+-- Breakdown by legacy debt_type label (API compatibility).
+SELECT
     type,
     COUNT(*) as count,
     COALESCE(SUM(outstanding_balance + accrued_interest), 0) as total_outstanding,
-    COALESCE(SUM(min_payment), 0) as total_min_payment,
-    CASE 
-        WHEN SUM(outstanding_balance) > 0 
+    COALESCE(SUM(minimum_obligation), 0) as total_min_payment,
+    CASE
+        WHEN SUM(outstanding_balance) > 0
         THEN ROUND((SUM(interest_rate * outstanding_balance) / SUM(outstanding_balance))::numeric, 5)
         ELSE 0
     END as avg_interest_rate
 FROM debts
-WHERE user_id = $1 
+WHERE user_id = $1
     AND outstanding_balance > 0
 GROUP BY type
 ORDER BY total_outstanding DESC;
 
--- name: GetDebtsByRiskLevel :many
--- Group debts by risk level
-SELECT 
-    risk_level,
+-- name: GetDebtsByTreatmentClassification :many
+SELECT
+    treatment_classification,
     COUNT(*) as count,
     COALESCE(SUM(outstanding_balance + accrued_interest), 0) as total_outstanding,
     COALESCE(AVG(debt_health_score), 0) as avg_health_score
 FROM debts
-WHERE user_id = $1 
+WHERE user_id = $1
     AND outstanding_balance > 0
-    AND risk_level IS NOT NULL
-GROUP BY risk_level
-ORDER BY 
-    CASE risk_level
-        WHEN 'high' THEN 1
-        WHEN 'medium' THEN 2
-        WHEN 'low' THEN 3
-    END;
+    AND treatment_classification IS NOT NULL
+GROUP BY treatment_classification
+ORDER BY treatment_classification;

@@ -1,9 +1,9 @@
 -- name: CreateCreditCard :one
 INSERT INTO credit_cards (
 	debt_id, billing_day, grace_period_days, min_payment_percent,
-	billed_balance, unbilled_balance, in_grace_period
+	billed_balance, unbilled_balance, in_grace_period, minimum_due
 ) VALUES (
-	$1, $2, $3, $4, $5, $6, $7
+	$1, $2, $3, $4, $5, $6, $7, $8
 )
 RETURNING *;
 

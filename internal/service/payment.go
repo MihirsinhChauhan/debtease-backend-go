@@ -36,20 +36,28 @@ type RecordPaymentParams struct {
 // accrueInterestUpTo calculates and persists interest accrual up to and including the given date.
 // Handles credit cards (daily after grace period) and loans (monthly on EMI date) differently.
 func (s *PaymentService) accrueInterestUpTo(ctx context.Context, q *database.Queries, debt database.Debt, upTo time.Time) error {
-	// Check if this is a credit card
-	if debt.Type == database.DebtTypeCreditCard {
+	if debt.Type == database.DebtTypeCreditCard || debt.InterestModel == database.InterestModelRevolving {
 		return s.accrueCreditCardInterest(ctx, q, debt, upTo)
 	}
 
-	// For loans, check if it's time for monthly accrual
-	if debt.Type == database.DebtTypePersonalLoan ||
-		debt.Type == database.DebtTypeStudentLoan ||
-		debt.Type == database.DebtTypeMortgage {
+	if debtUsesMonthlyLoanAccrual(debt) {
 		return s.accrueLoanInterest(ctx, q, debt, upTo)
 	}
 
-	// For other debt types, use daily accrual
 	return s.accrueDaily(ctx, q, debt, upTo)
+}
+
+func debtUsesMonthlyLoanAccrual(d database.Debt) bool {
+	if d.InterestModel == database.InterestModelRevolving || d.InterestModel == database.InterestModelZeroCostEmi {
+		return false
+	}
+	switch d.Type {
+	case database.DebtTypePersonalLoan, database.DebtTypeStudentLoan, database.DebtTypeMortgage,
+		database.DebtTypeHomeLoan, database.DebtTypeCarLoan, database.DebtTypeConsumerEmi:
+		return true
+	default:
+		return false
+	}
 }
 
 // accrueCreditCardInterest handles daily interest accrual for credit cards (only if grace period ended)

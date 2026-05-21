@@ -41,16 +41,16 @@ func ProcessLoanEMI(ctx context.Context, pool *sql.DB, q *database.Queries) {
 		if loan.InMoratorium.Valid && loan.InMoratorium.Bool {
 			if loan.MoratoriumUntil.Valid && today.After(loan.MoratoriumUntil.Time) {
 				remainingMonths := int32(0)
-				if loan.TenureMonths.Valid && loan.MonthsPaid.Valid {
-					remainingMonths = loan.TenureMonths.Int32 - loan.MonthsPaid.Int32
+				if loan.RemainingMonths.Valid {
+					remainingMonths = loan.RemainingMonths.Int32
 				}
 
 				if remainingMonths > 0 {
 					emi := calculateEMI(loan.OutstandingBalance, loan.InterestRate, int(remainingMonths))
 
 					err := qw.ExitMoratorium(ctx, database.ExitMoratoriumParams{
-						ID:        loan.ID,
-						EmiAmount: sql.NullString{String: emi.String(), Valid: true},
+						ID:                loan.ID,
+						MonthlyObligation: emi,
 					})
 
 					if err != nil {
@@ -156,20 +156,9 @@ func ProcessLoanEMI(ctx context.Context, pool *sql.DB, q *database.Queries) {
 		monthlyRate := loan.InterestRate.Div(decimal.NewFromInt(1200))
 		interestComponent := loan.OutstandingBalance.Mul(monthlyRate)
 
-		var emiAmount decimal.Decimal
-		if loan.EmiAmount.Valid {
-			var parseErr error
-			emiAmount, parseErr = decimal.NewFromString(loan.EmiAmount.String)
-			if parseErr != nil {
-				logger.Logger.Errorw("Invalid EMI amount",
-					"debt_id", loan.ID,
-					"loan_name", loan.Name,
-					"error", parseErr)
-				_ = tx.Rollback()
-				continue
-			}
-		} else {
-			logger.Logger.Warnw("Loan has no EMI amount set",
+		emiAmount := loan.MonthlyObligation
+		if emiAmount.IsZero() {
+			logger.Logger.Warnw("Loan has no monthly obligation set",
 				"debt_id", loan.ID,
 				"loan_name", loan.Name)
 			_ = tx.Rollback()
@@ -203,9 +192,9 @@ func ProcessLoanEMI(ctx context.Context, pool *sql.DB, q *database.Queries) {
 			continue
 		}
 
-		err = qw.UpdateLoanPayment(ctx, loan.ID)
+		err = qw.DecrementRemainingMonthsAfterEMI(ctx, loan.ID)
 		if err != nil {
-			logger.Logger.Errorw("UpdateLoanPayment failed",
+			logger.Logger.Errorw("DecrementRemainingMonthsAfterEMI failed",
 				"debt_id", loan.ID,
 				"loan_name", loan.Name,
 				"error", err)

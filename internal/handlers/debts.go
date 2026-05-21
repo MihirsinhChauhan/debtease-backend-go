@@ -3,6 +3,7 @@ package handlers
 import (
 	"DebtEase/internal/api"
 	"DebtEase/internal/database"
+	"DebtEase/internal/domain/debt"
 	financial_events "DebtEase/internal/domain/financial_events/v1"
 	"DebtEase/internal/ledger"
 	"DebtEase/internal/logger"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"github.com/sqlc-dev/pqtype"
 )
 
 func getUserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
@@ -65,11 +67,6 @@ func HandleCreateDebt(cfg *api.Config) http.HandlerFunc {
 			lender = sql.NullString{String: *req.Lender, Valid: *req.Lender != ""}
 		}
 
-		var risk database.NullRiskLevel
-		if req.RiskLevel != nil && *req.RiskLevel != "" {
-			risk = database.NullRiskLevel{RiskLevel: database.RiskLevel(*req.RiskLevel), Valid: true}
-		}
-
 		var priority sql.NullInt16
 		if req.Priority != nil {
 			priority = sql.NullInt16{Int16: *req.Priority, Valid: true}
@@ -80,26 +77,9 @@ func HandleCreateDebt(cfg *api.Config) http.HandlerFunc {
 			notes = sql.NullString{String: *req.Notes, Valid: *req.Notes != ""}
 		}
 
-		// Handle loan-specific fields
 		var paymentDueDay sql.NullInt32
 		if req.PaymentDueDay != nil {
 			paymentDueDay = sql.NullInt32{Int32: *req.PaymentDueDay, Valid: true}
-		}
-
-		var emiAmount sql.NullString
-		if req.EMIAmount != nil {
-			emiAmount = sql.NullString{String: req.EMIAmount.String(), Valid: true}
-		} else if req.Type == "personal_loan" || req.Type == "student_loan" || req.Type == "mortgage" {
-			// Calculate EMI if not provided for loan types
-			if req.TenureMonths != nil && *req.TenureMonths > 0 {
-				emi := calculateEMI(req.Principal, req.InterestRate, int(*req.TenureMonths))
-				emiAmount = sql.NullString{String: emi.String(), Valid: true}
-			}
-		}
-
-		var tenureMonths sql.NullInt32
-		if req.TenureMonths != nil {
-			tenureMonths = sql.NullInt32{Int32: *req.TenureMonths, Valid: true}
 		}
 
 		var moratoriumUntil sql.NullTime
@@ -109,27 +89,55 @@ func HandleCreateDebt(cfg *api.Config) http.HandlerFunc {
 
 		inMoratorium := req.MoratoriumUntil != nil && req.MoratoriumUntil.After(time.Now())
 
+		obl := debt.NormalizeCreate(debt.CreateObligationInput{
+			DebtType:      database.DebtType(req.Type),
+			InterestRate:  req.InterestRate,
+			MinPayment:    req.MinPayment,
+			Principal:     req.Principal,
+			EMIAmount:     req.EMIAmount,
+			TenureMonths:  req.TenureMonths,
+			PaymentDueDay: req.PaymentDueDay,
+			DueDate:       dueDate,
+		})
+
+		var treatment sql.NullString
+		if req.TreatmentClassification != nil && *req.TreatmentClassification != "" {
+			treatment = sql.NullString{String: *req.TreatmentClassification, Valid: true}
+		}
+
 		params := database.CreateDebtParams{
-			UserID:             userID,
-			Name:               req.Name,
-			Type:               database.DebtType(req.Type),
-			Lender:             lender,
-			PrincipalDecimal:   req.Principal,
-			OutstandingBalance: req.OutstandingBalance,
-			InterestRate:       req.InterestRate,
-			MinPayment:         req.MinPayment,
-			DueDate:            dueDate,
-			PaymentFrequency:   paymentFreq,
-			DebtTaken:          debtTaken,
-			RiskLevel:          risk,
-			Priority:           priority,
-			Notes:              notes,
-			PaymentDueDay:      paymentDueDay,
-			EmiAmount:          emiAmount,
-			TenureMonths:       tenureMonths,
-			MonthsPaid:         sql.NullInt32{Int32: 0, Valid: true},
-			MoratoriumUntil:    moratoriumUntil,
-			InMoratorium:       sql.NullBool{Bool: inMoratorium, Valid: true},
+			UserID:                  userID,
+			Name:                    req.Name,
+			Type:                    database.DebtType(req.Type),
+			Lender:                  lender,
+			PrincipalDecimal:        req.Principal,
+			OutstandingBalance:      req.OutstandingBalance,
+			InterestRate:            req.InterestRate,
+			MinPayment:              req.MinPayment,
+			DueDate:                 dueDate,
+			PaymentFrequency:        paymentFreq,
+			DebtTaken:               debtTaken,
+			Priority:                priority,
+			Notes:                   notes,
+			PaymentDueDay:           paymentDueDay,
+			MoratoriumUntil:         moratoriumUntil,
+			InMoratorium:            sql.NullBool{Bool: inMoratorium, Valid: true},
+			InstrumentType:          obl.InstrumentType,
+			InterestModel:           obl.InterestModel,
+			MonthlyObligation:       obl.MonthlyObligation,
+			MinimumObligation:       obl.MinimumObligation,
+			RemainingMonths:         obl.RemainingMonths,
+			DueDay:                  obl.DueDay,
+			IsSecured:               obl.IsSecured,
+			IsRevolving:             obl.IsRevolving,
+			IsShortTerm:             obl.IsShortTerm,
+			IsInterestBearing:       obl.IsInterestBearing,
+			FragmentationWeight:     obl.FragmentationWeight,
+			StressPriority:          obl.StressPriority,
+			TreatmentClassification: treatment,
+			EngineVersion:           obl.EngineVersion,
+			PolicyVersion:           obl.PolicyVersion,
+			ExtraMetadata:           pqtype.NullRawMessage{},
 		}
 
 		if req.Type == "credit_card" {
@@ -177,6 +185,7 @@ func HandleCreateDebt(cfg *api.Config) http.HandlerFunc {
 				BilledBalance:     decimal.Zero,
 				UnbilledBalance:   req.OutstandingBalance,
 				InGracePeriod:     true,
+				MinimumDue:        req.MinPayment,
 			}
 
 			if _, err := qtx.CreateCreditCard(ctx, ccParams); err != nil {
@@ -186,17 +195,13 @@ func HandleCreateDebt(cfg *api.Config) http.HandlerFunc {
 			}
 		}
 
-		emiMeta := ""
-		if debt.EmiAmount.Valid {
-			emiMeta = debt.EmiAmount.String
-		}
 		meta := map[string]interface{}{
 			financial_events.MetaDebtID:         debt.ID.String(),
 			financial_events.MetaDebtType:       string(debt.Type),
 			financial_events.MetaOpeningBalance: debt.OutstandingBalance.StringFixed(2),
 		}
-		if emiMeta != "" {
-			meta[financial_events.MetaEMIAmount] = emiMeta
+		if !debt.MonthlyObligation.IsZero() {
+			meta[financial_events.MetaEMIAmount] = debt.MonthlyObligation.StringFixed(2)
 		}
 		bal := debt.OutstandingBalance
 		if err := ledger.Append(ctx, qtx, ledger.Params{
@@ -499,11 +504,6 @@ func toDebtResponse(d database.Debt) models.DebtResponse {
 	if d.DebtTaken.Valid {
 		debtTaken = &d.DebtTaken.Time
 	}
-	var risk *string
-	if d.RiskLevel.Valid {
-		s := string(d.RiskLevel.RiskLevel)
-		risk = &s
-	}
 	var score *decimal.Decimal
 	if d.DebtHealthScore.Valid {
 		if v, err := decimal.NewFromString(d.DebtHealthScore.String); err == nil {
@@ -533,27 +533,26 @@ func toDebtResponse(d database.Debt) models.DebtResponse {
 	accruedInterest := d.AccruedInterest
 	lastAccrualDate := d.LastAccrualDate
 
-	// Parse loan fields
+	var treatment *string
+	if d.TreatmentClassification.Valid {
+		s := d.TreatmentClassification.String
+		treatment = &s
+	}
+
+	var remainingMonths *int32
+	if d.RemainingMonths.Valid {
+		v := d.RemainingMonths.Int32
+		remainingMonths = &v
+	}
+	var dueDay *int32
+	if d.DueDay.Valid {
+		v := d.DueDay.Int32
+		dueDay = &v
+	}
 	var paymentDueDay *int32
 	if d.PaymentDueDay.Valid {
 		v := d.PaymentDueDay.Int32
 		paymentDueDay = &v
-	}
-	var emiAmount *decimal.Decimal
-	if d.EmiAmount.Valid {
-		if v, err := decimal.NewFromString(d.EmiAmount.String); err == nil {
-			emiAmount = &v
-		}
-	}
-	var tenureMonths *int32
-	if d.TenureMonths.Valid {
-		v := d.TenureMonths.Int32
-		tenureMonths = &v
-	}
-	var monthsPaid *int32
-	if d.MonthsPaid.Valid {
-		v := d.MonthsPaid.Int32
-		monthsPaid = &v
 	}
 	var moratoriumUntil *time.Time
 	if d.MoratoriumUntil.Valid {
@@ -581,7 +580,6 @@ func toDebtResponse(d database.Debt) models.DebtResponse {
 		LateFees:           lateFees,
 		OtherCharges:       otherCharges,
 		DebtTaken:          debtTaken,
-		RiskLevel:          risk,
 		DebtHealthScore:    score,
 		Priority:           priority,
 		Notes:              notes,
@@ -589,40 +587,25 @@ func toDebtResponse(d database.Debt) models.DebtResponse {
 		LastAccrualDate:    lastAccrualDate,
 		CreatedAt:          createdAt,
 		UpdatedAt:          updatedAt,
-		PaymentDueDay:      paymentDueDay,
-		EMIAmount:          emiAmount,
-		TenureMonths:       tenureMonths,
-		MonthsPaid:         monthsPaid,
-		MoratoriumUntil:    moratoriumUntil,
-		InMoratorium:       inMoratorium,
+
+		InstrumentType:          string(d.InstrumentType),
+		InterestModel:           string(d.InterestModel),
+		MonthlyObligation:       d.MonthlyObligation,
+		MinimumObligation:       d.MinimumObligation,
+		RemainingMonths:         remainingMonths,
+		DueDay:                  dueDay,
+		IsSecured:               d.IsSecured,
+		IsRevolving:             d.IsRevolving,
+		IsShortTerm:             d.IsShortTerm,
+		IsInterestBearing:       d.IsInterestBearing,
+		FragmentationWeight:     d.FragmentationWeight,
+		StressPriority:          d.StressPriority,
+		TreatmentClassification: treatment,
+		EngineVersion:           d.EngineVersion,
+		PolicyVersion:           d.PolicyVersion,
+
+		PaymentDueDay:   paymentDueDay,
+		MoratoriumUntil: moratoriumUntil,
+		InMoratorium:    inMoratorium,
 	}
-}
-
-// calculateEMI calculates EMI using reducing balance formula
-// EMI = P * r * (1+r)^n / ((1+r)^n - 1)
-// where P = principal, r = monthly interest rate, n = number of months
-func calculateEMI(principal, annualRate decimal.Decimal, months int) decimal.Decimal {
-	if months == 0 {
-		return decimal.Zero
-	}
-
-	// Convert annual rate to monthly rate: APR / 1200
-	monthlyRate := annualRate.Div(decimal.NewFromInt(1200))
-
-	if monthlyRate.IsZero() {
-		return principal.Div(decimal.NewFromInt(int64(months)))
-	}
-
-	// Calculate (1 + r)
-	onePlusR := decimal.NewFromInt(1).Add(monthlyRate)
-
-	// Calculate (1 + r)^n using Pow
-	onePlusRPowN := onePlusR.Pow(decimal.NewFromInt(int64(months)))
-
-	// EMI = P * r * (1+r)^n / ((1+r)^n - 1)
-	numerator := principal.Mul(monthlyRate).Mul(onePlusRPowN)
-	denominator := onePlusRPowN.Sub(decimal.NewFromInt(1))
-
-	emi := numerator.Div(denominator)
-	return emi.Round(2)
 }
