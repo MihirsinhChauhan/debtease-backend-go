@@ -56,6 +56,11 @@ func GetOrCreateSession(ctx context.Context, db *database.Queries, sessionID uui
 	return sessionID, nil
 }
 
+// GetSessionByID loads a calculation session by its public session_id UUID (cookie / query).
+func GetSessionByID(ctx context.Context, db *database.Queries, sessionID uuid.UUID) (database.CalculationSession, error) {
+	return db.GetCalculationSessionByID(ctx, sessionID)
+}
+
 func SessionExists(ctx context.Context, db *database.Queries, sessionID uuid.UUID) (bool, error) {
 	return db.SessionExists(ctx, sessionID)
 }

@@ -39,7 +39,7 @@ func HandlePostFinanceSteps(cfg *api.Config) http.HandlerFunc {
 		if req.EngineVersion != nil && *req.EngineVersion != "" {
 			engineVersion = *req.EngineVersion
 		}
-		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion)
+		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion, nil)
 		if err != nil {
 			logger.Logger.Errorw("Failed to get or create session", "error", err)
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to process session")
@@ -114,7 +114,7 @@ func HandlePutFinanceSteps(cfg *api.Config) http.HandlerFunc {
 		if req.EngineVersion != nil && *req.EngineVersion != "" {
 			engineVersion = *req.EngineVersion
 		}
-		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion)
+		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion, nil)
 		if err != nil {
 			logger.Logger.Errorw("Failed to get or create session", "error", err)
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to process session")
@@ -159,7 +159,7 @@ func HandlePatchFinanceSteps(cfg *api.Config) http.HandlerFunc {
 		if req.EngineVersion != nil && *req.EngineVersion != "" {
 			engineVersion = *req.EngineVersion
 		}
-		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion)
+		sessionID, err = webapp_service.GetOrCreateSession(ctx, cfg.DB, sessionID, engineVersion, nil)
 		if err != nil {
 			logger.Logger.Errorw("Failed to get or create session", "error", err)
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to process session")
