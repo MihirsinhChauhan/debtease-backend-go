@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	// "time"
@@ -95,10 +96,14 @@ func main() {
 
 	// Initialize config
 	cfg := &api.Config{
-		DB:        dbQueries,
-		DBPool:    db,
-		Platform:  platform,
-		JWTSecret: jwtSecret,
+		DB:                         dbQueries,
+		DBPool:                     db,
+		Platform:                   platform,
+		JWTSecret:                  jwtSecret,
+		GoogleClientID:             strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID")),
+		GoogleClientSecret:         strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET")),
+		GoogleRedirectURL:          strings.TrimSpace(os.Getenv("GOOGLE_REDIRECT_URL")),
+		GoogleLoginSuccessRedirect: strings.TrimSpace(os.Getenv("GOOGLE_LOGIN_SUCCESS_REDIRECT")),
 		// RabbitMQURL: rabbitmqURL,
 	}
 
@@ -127,6 +132,11 @@ func main() {
 	mux.HandleFunc("POST /api/register", handlers.HandleCreateUser(cfg))
 	mux.HandleFunc("POST /api/refresh", handlers.HandleTokenRefresh(cfg))
 	mux.HandleFunc("PUT /api/users", handlers.HandleUpdateUser(cfg))
+	mux.HandleFunc("POST /api/login/google", handlers.HandleGoogleLoginIDToken(cfg))
+
+	// Browser Google OAuth flow (authorize GOOGLE_REDIRECT_URL to exactly this server's callback path)
+	mux.HandleFunc("GET /api/auth/google", handlers.HandleGoogleOAuthStart(cfg))
+	mux.HandleFunc("GET /api/auth/google/callback", handlers.HandleGoogleOAuthCallback(cfg))
 
 	// dashboard (authenticated)
 	getDashboard := handlers.HandleGetDashboard(cfg)
@@ -134,6 +144,9 @@ func main() {
 
 	listMyFinancialEvents := handlers.HandleListMyFinancialEvents(cfg)
 	mux.Handle("GET /api/users/me/financial-events", middleware.Logging(middleware.AuthRequired(cfg, listMyFinancialEvents)))
+
+	listRecentSnapshots := handlers.HandleListRecentFinancialSnapshots(cfg)
+	mux.Handle("GET /api/users/me/financial-snapshots/recent", middleware.Logging(middleware.AuthRequired(cfg, listRecentSnapshots)))
 
 	listRecentPayments := handlers.HandleListRecentPayments(cfg)
 	mux.Handle("GET /api/payments/recent", middleware.Logging(middleware.AuthRequired(cfg, listRecentPayments)))

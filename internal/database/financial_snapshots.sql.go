@@ -317,3 +317,61 @@ func (q *Queries) InsertFinancialSnapshot(ctx context.Context, arg InsertFinanci
 	)
 	return i, err
 }
+
+const listFinancialSnapshotsForUser = `-- name: ListFinancialSnapshotsForUser :many
+SELECT id, user_id, session_id, snapshot_type, snapshot_source, monthly_income, other_income, fixed_expenses, variable_expenses, savings_cash, investments_value, total_monthly_emi, total_debt_balance, dependents_count, trigger_event, snapshot_version, extra_data, created_at, unsecured_monthly_obligation, revolving_monthly_obligation, short_term_obligations
+FROM financial_snapshots
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT $2
+`
+
+type ListFinancialSnapshotsForUserParams struct {
+	UserID uuid.NullUUID
+	Limit  int32
+}
+
+func (q *Queries) ListFinancialSnapshotsForUser(ctx context.Context, arg ListFinancialSnapshotsForUserParams) ([]FinancialSnapshot, error) {
+	rows, err := q.db.QueryContext(ctx, listFinancialSnapshotsForUser, arg.UserID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FinancialSnapshot
+	for rows.Next() {
+		var i FinancialSnapshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.SessionID,
+			&i.SnapshotType,
+			&i.SnapshotSource,
+			&i.MonthlyIncome,
+			&i.OtherIncome,
+			&i.FixedExpenses,
+			&i.VariableExpenses,
+			&i.SavingsCash,
+			&i.InvestmentsValue,
+			&i.TotalMonthlyEmi,
+			&i.TotalDebtBalance,
+			&i.DependentsCount,
+			&i.TriggerEvent,
+			&i.SnapshotVersion,
+			&i.ExtraData,
+			&i.CreatedAt,
+			&i.UnsecuredMonthlyObligation,
+			&i.RevolvingMonthlyObligation,
+			&i.ShortTermObligations,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

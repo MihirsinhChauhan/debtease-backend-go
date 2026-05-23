@@ -422,11 +422,13 @@ type RefreshToken struct {
 
 type User struct {
 	ID            uuid.UUID
-	Name          string
 	Email         string
-	PasswordHash  string
+	PasswordHash  sql.NullString
 	MonthlyIncome decimal.Decimal
 	IsActive      sql.NullBool
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	FirstName     string
+	LastName      string
+	GoogleID      sql.NullString
 }

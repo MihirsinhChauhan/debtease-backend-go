@@ -7,8 +7,8 @@ import (
 	"DebtEase/internal/logger"
 	"DebtEase/internal/models"
 	"DebtEase/internal/utils"
-	// "DebtEase/internal/events"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -49,7 +49,16 @@ func HandleCreateUser(cfg *api.Config) http.HandlerFunc {
 			return
 		}
 
-		name := strings.TrimSpace(req.Name)
+		first := strings.TrimSpace(req.FirstName)
+		last := strings.TrimSpace(req.LastName)
+		if first == "" {
+			utils.RespondWithError(w, http.StatusBadRequest, "First name is required")
+			return
+		}
+		if last == "" {
+			utils.RespondWithError(w, http.StatusBadRequest, "Last name is required")
+			return
+		}
 
 		hash, err := auth.HashPassword(req.Password)
 
@@ -61,9 +70,10 @@ func HandleCreateUser(cfg *api.Config) http.HandlerFunc {
 
 		ctx := context.Background()
 		user, err := cfg.DB.CreateUser(ctx, database.CreateUserParams{
-			Name:         name,
+			FirstName:    first,
+			LastName:     last,
 			Email:        req.Email,
-			PasswordHash: hash,
+			PasswordHash: sql.NullString{String: hash, Valid: true},
 		})
 		if err != nil {
 			if strings.Contains(err.Error(), "duplicate key") {
@@ -85,7 +95,7 @@ func HandleCreateUser(cfg *api.Config) http.HandlerFunc {
 		// 	event := events.NewUserRegisteredEvent(
 		// 		user.ID,
 		// 		user.Email,
-		// 		user.Name,
+		// 		utils.JoinPersonName(user.FirstName, user.LastName),
 		// 		user.CreatedAt,
 		// 	)
 		// 	if err := events.PublishEvent(cfg.RabbitMQURL, events.ExchangeNotifications, events.RoutingUserRegistered, event); err != nil {
@@ -96,7 +106,9 @@ func HandleCreateUser(cfg *api.Config) http.HandlerFunc {
 		// }()
 		resp := models.CreateUserResponse{
 			ID:        user.ID,
-			Name:      user.Name,
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Name:      utils.JoinPersonName(user.FirstName, user.LastName),
 			Email:     user.Email,
 			CreatedAt: user.CreatedAt.Format(time.RFC3339),
 			UpdatedAt: user.UpdatedAt.Format(time.RFC3339),
@@ -145,7 +157,7 @@ func HandleUpdateUser(cfg *api.Config) http.HandlerFunc {
 		}
 
 		// === 3. Validate provided fields (partial allowed) ===
-		if req.Name == nil && req.Email == nil && req.Password == nil && req.MonthlyIncome == nil {
+		if req.FirstName == nil && req.LastName == nil && req.Email == nil && req.Password == nil && req.MonthlyIncome == nil {
 			utils.RespondWithError(w, http.StatusBadRequest, "Provide at least one field to update")
 			return
 		}
@@ -168,9 +180,18 @@ func HandleUpdateUser(cfg *api.Config) http.HandlerFunc {
 		}
 
 		// === 5. Prepare updated fields ===
-		finalName := existing.Name
-		if req.Name != nil {
-			finalName = strings.TrimSpace(*req.Name)
+		finalFirst := existing.FirstName
+		if req.FirstName != nil {
+			t := strings.TrimSpace(*req.FirstName)
+			if t == "" {
+				utils.RespondWithError(w, http.StatusBadRequest, "First name cannot be empty")
+				return
+			}
+			finalFirst = t
+		}
+		finalLast := existing.LastName
+		if req.LastName != nil {
+			finalLast = strings.TrimSpace(*req.LastName)
 		}
 		finalEmail := existing.Email
 		if req.Email != nil {
@@ -184,7 +205,7 @@ func HandleUpdateUser(cfg *api.Config) http.HandlerFunc {
 				utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update user")
 				return
 			}
-			finalPasswordHash = hashedPassword
+			finalPasswordHash = sql.NullString{String: hashedPassword, Valid: true}
 		}
 		finalMonthlyIncome := existing.MonthlyIncome
 		if req.MonthlyIncome != nil {
@@ -194,7 +215,8 @@ func HandleUpdateUser(cfg *api.Config) http.HandlerFunc {
 		// === 6. Update user in DB ===
 		updatedUser, err := cfg.DB.UpdateUser(ctx, database.UpdateUserParams{
 			ID:            userID,
-			Name:          finalName,
+			FirstName:     finalFirst,
+			LastName:      finalLast,
 			Email:         finalEmail,
 			PasswordHash:  finalPasswordHash,
 			MonthlyIncome: finalMonthlyIncome,
@@ -211,7 +233,9 @@ func HandleUpdateUser(cfg *api.Config) http.HandlerFunc {
 		// === 7. Build response (omit password) ===
 		resp := models.UpdateUserResponse{
 			ID:            updatedUser.ID,
-			Name:          updatedUser.Name,
+			FirstName:     updatedUser.FirstName,
+			LastName:      updatedUser.LastName,
+			Name:          utils.JoinPersonName(updatedUser.FirstName, updatedUser.LastName),
 			Email:         updatedUser.Email,
 			MonthlyIncome: updatedUser.MonthlyIncome,
 			CreatedAt:     updatedUser.CreatedAt.Format(time.RFC3339),

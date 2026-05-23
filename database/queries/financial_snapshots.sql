@@ -72,3 +72,10 @@ INSERT INTO financial_snapshots (
     $17, $18, $19
 )
 RETURNING *;
+
+-- name: ListFinancialSnapshotsForUser :many
+SELECT *
+FROM financial_snapshots
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT $2;

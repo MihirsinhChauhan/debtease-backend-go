@@ -7,41 +7,86 @@ package database
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (name, email, password_hash)
-VALUES ($1, $2, $3)
-RETURNING id, name, email, password_hash, monthly_income, is_active, created_at, updated_at
+INSERT INTO users (first_name, last_name, email, password_hash)
+VALUES ($1, $2, $3, $4)
+RETURNING id, email, password_hash, monthly_income, is_active, created_at, updated_at, first_name, last_name, google_id
 `
 
 type CreateUserParams struct {
-	Name         string
+	FirstName    string
+	LastName     string
 	Email        string
-	PasswordHash string
+	PasswordHash sql.NullString
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser, arg.Name, arg.Email, arg.PasswordHash)
+	row := q.db.QueryRowContext(ctx, createUser,
+		arg.FirstName,
+		arg.LastName,
+		arg.Email,
+		arg.PasswordHash,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
 		&i.MonthlyIncome,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.GoogleID,
+	)
+	return i, err
+}
+
+const createUserGoogle = `-- name: CreateUserGoogle :one
+INSERT INTO users (first_name, last_name, email, google_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id, email, password_hash, monthly_income, is_active, created_at, updated_at, first_name, last_name, google_id
+`
+
+type CreateUserGoogleParams struct {
+	FirstName string
+	LastName  string
+	Email     string
+	GoogleID  sql.NullString
+}
+
+func (q *Queries) CreateUserGoogle(ctx context.Context, arg CreateUserGoogleParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, createUserGoogle,
+		arg.FirstName,
+		arg.LastName,
+		arg.Email,
+		arg.GoogleID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.MonthlyIncome,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.GoogleID,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, password_hash, monthly_income, is_active, created_at, updated_at FROM users WHERE email = $1 LIMIT 1
+SELECT id, email, password_hash, monthly_income, is_active, created_at, updated_at, first_name, last_name, google_id FROM users WHERE email = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -49,19 +94,43 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
 		&i.MonthlyIncome,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.GoogleID,
+	)
+	return i, err
+}
+
+const getUserByGoogleID = `-- name: GetUserByGoogleID :one
+SELECT id, email, password_hash, monthly_income, is_active, created_at, updated_at, first_name, last_name, google_id FROM users WHERE google_id = $1 LIMIT 1
+`
+
+func (q *Queries) GetUserByGoogleID(ctx context.Context, googleID sql.NullString) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByGoogleID, googleID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.MonthlyIncome,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.GoogleID,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, password_hash, monthly_income, is_active, created_at, updated_at FROM users WHERE id = $1 LIMIT 1
+SELECT id, email, password_hash, monthly_income, is_active, created_at, updated_at, first_name, last_name, google_id FROM users WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -69,33 +138,74 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
 		&i.MonthlyIncome,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.GoogleID,
+	)
+	return i, err
+}
+
+const linkUserGoogleIDByEmail = `-- name: LinkUserGoogleIDByEmail :one
+UPDATE users
+SET google_id = $2, updated_at = NOW()
+WHERE email = $1 AND google_id IS NULL
+RETURNING id, email, password_hash, monthly_income, is_active, created_at, updated_at, first_name, last_name, google_id
+`
+
+type LinkUserGoogleIDByEmailParams struct {
+	Email    string
+	GoogleID sql.NullString
+}
+
+func (q *Queries) LinkUserGoogleIDByEmail(ctx context.Context, arg LinkUserGoogleIDByEmailParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, linkUserGoogleIDByEmail, arg.Email, arg.GoogleID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.MonthlyIncome,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.GoogleID,
 	)
 	return i, err
 }
 
 const updateUser = `-- name: UpdateUser :one
-UPDATE users SET name = $2, email = $3, password_hash = $4, monthly_income = $5 WHERE id = $1 RETURNING id, name, email, password_hash, monthly_income, is_active, created_at, updated_at
+UPDATE users SET
+  first_name = $2,
+  last_name = $3,
+  email = $4,
+  password_hash = $5,
+  monthly_income = $6
+WHERE id = $1
+RETURNING id, email, password_hash, monthly_income, is_active, created_at, updated_at, first_name, last_name, google_id
 `
 
 type UpdateUserParams struct {
 	ID            uuid.UUID
-	Name          string
+	FirstName     string
+	LastName      string
 	Email         string
-	PasswordHash  string
+	PasswordHash  sql.NullString
 	MonthlyIncome decimal.Decimal
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, updateUser,
 		arg.ID,
-		arg.Name,
+		arg.FirstName,
+		arg.LastName,
 		arg.Email,
 		arg.PasswordHash,
 		arg.MonthlyIncome,
@@ -103,13 +213,15 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
 		&i.MonthlyIncome,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.GoogleID,
 	)
 	return i, err
 }

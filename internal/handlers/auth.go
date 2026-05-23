@@ -2,17 +2,19 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"strings"
+	"time"
+
 	"DebtEase/internal/api"
 	"DebtEase/internal/auth"
 	"DebtEase/internal/database"
 	"DebtEase/internal/logger"
 	"DebtEase/internal/models"
 	"DebtEase/internal/utils"
-	"context"
-	"database/sql"
-	"encoding/json"
-	"net/http"
-	"time"
 )
 
 func HandleLogin(cfg *api.Config) http.HandlerFunc {
@@ -39,7 +41,12 @@ func HandleLogin(cfg *api.Config) http.HandlerFunc {
 			return
 		}
 
-		match, err := auth.CheckPasswordHash(req.Password, user.PasswordHash)
+		if !user.PasswordHash.Valid || strings.TrimSpace(user.PasswordHash.String) == "" {
+			utils.RespondWithError(w, http.StatusUnauthorized, "This account uses Google sign-in.")
+			return
+		}
+
+		match, err := auth.CheckPasswordHash(req.Password, user.PasswordHash.String)
 		if err != nil {
 			logger.Logger.Errorw("Password check error", "error", err)
 			utils.RespondWithError(w, http.StatusInternalServerError, "Authentication error")
@@ -51,40 +58,11 @@ func HandleLogin(cfg *api.Config) http.HandlerFunc {
 			return
 		}
 
-		// Generate JWT
-		accessToken, err := auth.MakeJWT(user.ID, cfg.JWTSecret, time.Hour)
+		resp, err := buildLoginSession(ctx, cfg, user)
 		if err != nil {
-			logger.Logger.Errorw("Token Creation failed", "error", err)
-			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create token")
-			return
-		}
-
-		refreshToken, err := auth.MakeRefreshToken()
-		if err != nil {
-			logger.Logger.Errorw("Failed to generate refresh token", "error", err)
-			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create refresh token")
-			return
-		}
-
-		expiresAt := time.Now().Add(60 * 24 * time.Hour)
-		err = cfg.DB.CreateRefreshToken(ctx, database.CreateRefreshTokenParams{
-			Token:     refreshToken,
-			UserID:    user.ID,
-			ExpiresAt: expiresAt,
-		})
-		if err != nil {
-			logger.Logger.Errorw("Failed to save refresh token", "error", err)
+			logger.Logger.Errorw("Failed to persist login session", "error", err)
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create session")
 			return
-		}
-
-		resp := models.LoginResponse{
-			ID:           user.ID,
-			Email:        user.Email,
-			CreatedAt:    user.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:    user.UpdatedAt.Format(time.RFC3339),
-			Token:        accessToken,
-			RefreshToken: refreshToken,
 		}
 
 		logger.Logger.Infow("Login successful", "user_id", user.ID, "email", user.Email)

@@ -58,7 +58,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+							"raw": "{\n  \"first_name\": \"Jane\",\n  \"last_name\": \"Smith\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/register",
