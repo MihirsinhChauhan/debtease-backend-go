@@ -548,45 +548,35 @@ Drivers shown:
 
 # 13. Health Timeline
 
-Timeline is generated from snapshots.
-
-Query:
-
-```
-SELECT created_at, score
-FROM financial_snapshots
-ORDER BY created_at;
-```
-
-This produces a trend graph:
-
-```
-Financial Health Over Time
-```
+Timeline is generated from snapshots over time (each row holds aggregate inputs only). **Financial health scores are not persisted** on `financial_snapshots`; charts should either store recomputed scores as derived artifacts elsewhere or re-run `health_v1` when rendering history.
 
 ---
 
 # 14. System Architecture
 
-Final architecture layers:
+Final architecture layers (domain ledger + projections):
 
 ```
 Identity Layer
     users
 
-Debt Portfolio Layer
+Immutable transitions (source timeline)
+    financial_events   — append-only domain ledger
+
+Debt Portfolio Layer (materialized cache for UX & queries)
     debts
     payments_history
+    credit_cards
 
-Financial State Layer
-    financial_snapshots
+Financial State Layer (aggregate inputs cache / timelines)
+    financial_snapshots   — onboarding + auto_generated projections
 
 Decision Intelligence Layer
     classification engine
     stress simulation
 
 Insight Layer
-    financial health score
+    financial health score (always recomputed)
 ```
 
 ---
@@ -613,9 +603,13 @@ Hypothetical loans must never modify real debt records.
 
 ---
 
-### Financial snapshots are authoritative state
+### Ledger, snapshots, and live debts
 
-All engines depend on snapshots as their input.
+* **`financial_events`** — canonical **append-only** history of financial transitions (payments, instrument creation, manual adjustments, worker-driven interest/EMI/statement steps).
+* **`financial_snapshots`** — **cached aggregate inputs** for engines and timelines (onboarding captures user_input; logged-in mutations append **auto_generated / calculated** rows refreshed from live debts).
+* **`debts` / `payments_history`** — Phase 1 **materialized portfolio cache** updated alongside ledger writes; balances remain query-optimized surfaces while events provide auditability and future replay.
+
+Engines should converge on **one projection builder** that merges snapshot fields (income, buffers, unsecured ratio hints) with **live portfolio rollups** (`GetPortfolioRollupForUser`) so dashboard intelligence matches actual EMI load.
 
 ---
 

@@ -38,7 +38,7 @@ SELECT
     lender,
     outstanding_balance,
     accrued_interest,
-    COALESCE(emi_amount, min_payment) as payment_amount,
+    COALESCE(monthly_obligation, min_payment) as payment_amount,
     due_date,
     payment_due_day,
     is_overdue,

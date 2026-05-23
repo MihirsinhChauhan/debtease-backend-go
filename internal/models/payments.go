@@ -27,3 +27,18 @@ type PaymentResponse struct {
 	CreatedAt        time.Time       `json:"created_at"`
 }
 
+// RecentPaymentResponse is a portfolio-wide payment row for the web payments hub.
+type RecentPaymentResponse struct {
+	ID               string          `json:"id"`
+	DebtID           string          `json:"debt_id"`
+	DebtName         string          `json:"debt_name"`
+	Amount           decimal.Decimal `json:"amount"`
+	PaymentDate      string          `json:"payment_date"`
+	Type             string          `json:"type"`
+	Notes            *string         `json:"notes,omitempty"`
+	PrincipalApplied decimal.Decimal `json:"principal_applied"`
+	InterestApplied  decimal.Decimal `json:"interest_applied"`
+	PaymentMethod    *string         `json:"payment_method,omitempty"`
+	CreatedAt        time.Time       `json:"created_at"`
+}
+

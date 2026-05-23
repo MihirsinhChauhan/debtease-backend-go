@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"github.com/sqlc-dev/pqtype"
 )
 
 const accrueInterest = `-- name: AccrueInterest :exec
@@ -38,36 +39,54 @@ INSERT INTO debts (
   user_id, name, type, lender, principal_decimal,
   outstanding_balance, interest_rate, min_payment,
   due_date, payment_frequency, debt_taken,
-  risk_level, priority, notes,
-  payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
+  priority, notes,
+  payment_due_day, moratorium_until, in_moratorium,
+  instrument_type, interest_model,
+  monthly_obligation, minimum_obligation, remaining_months, due_day,
+  is_secured, is_revolving, is_short_term, is_interest_bearing,
+  fragmentation_weight, stress_priority,
+  treatment_classification, engine_version, policy_version, extra_metadata
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-  $15, $16, $17, $18, $19, $20
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+  $12, $13, $14, $15, $16,
+  $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
 )
-RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
+RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, moratorium_until, in_moratorium, instrument_type, interest_model, monthly_obligation, minimum_obligation, remaining_months, due_day, is_secured, is_revolving, is_short_term, is_interest_bearing, fragmentation_weight, stress_priority, treatment_classification, engine_version, policy_version, extra_metadata
 `
 
 type CreateDebtParams struct {
-	UserID             uuid.UUID
-	Name               string
-	Type               DebtType
-	Lender             sql.NullString
-	PrincipalDecimal   decimal.Decimal
-	OutstandingBalance decimal.Decimal
-	InterestRate       decimal.Decimal
-	MinPayment         decimal.Decimal
-	DueDate            time.Time
-	PaymentFrequency   NullPaymentFreq
-	DebtTaken          sql.NullTime
-	RiskLevel          NullRiskLevel
-	Priority           sql.NullInt16
-	Notes              sql.NullString
-	PaymentDueDay      sql.NullInt32
-	EmiAmount          sql.NullString
-	TenureMonths       sql.NullInt32
-	MonthsPaid         sql.NullInt32
-	MoratoriumUntil    sql.NullTime
-	InMoratorium       sql.NullBool
+	UserID                  uuid.UUID
+	Name                    string
+	Type                    DebtType
+	Lender                  sql.NullString
+	PrincipalDecimal        decimal.Decimal
+	OutstandingBalance      decimal.Decimal
+	InterestRate            decimal.Decimal
+	MinPayment              decimal.Decimal
+	DueDate                 time.Time
+	PaymentFrequency        NullPaymentFreq
+	DebtTaken               sql.NullTime
+	Priority                sql.NullInt16
+	Notes                   sql.NullString
+	PaymentDueDay           sql.NullInt32
+	MoratoriumUntil         sql.NullTime
+	InMoratorium            sql.NullBool
+	InstrumentType          DebtInstrumentType
+	InterestModel           InterestModel
+	MonthlyObligation       decimal.Decimal
+	MinimumObligation       decimal.Decimal
+	RemainingMonths         sql.NullInt32
+	DueDay                  sql.NullInt32
+	IsSecured               bool
+	IsRevolving             bool
+	IsShortTerm             bool
+	IsInterestBearing       bool
+	FragmentationWeight     decimal.Decimal
+	StressPriority          int16
+	TreatmentClassification sql.NullString
+	EngineVersion           string
+	PolicyVersion           string
+	ExtraMetadata           pqtype.NullRawMessage
 }
 
 func (q *Queries) CreateDebt(ctx context.Context, arg CreateDebtParams) (Debt, error) {
@@ -83,15 +102,27 @@ func (q *Queries) CreateDebt(ctx context.Context, arg CreateDebtParams) (Debt, e
 		arg.DueDate,
 		arg.PaymentFrequency,
 		arg.DebtTaken,
-		arg.RiskLevel,
 		arg.Priority,
 		arg.Notes,
 		arg.PaymentDueDay,
-		arg.EmiAmount,
-		arg.TenureMonths,
-		arg.MonthsPaid,
 		arg.MoratoriumUntil,
 		arg.InMoratorium,
+		arg.InstrumentType,
+		arg.InterestModel,
+		arg.MonthlyObligation,
+		arg.MinimumObligation,
+		arg.RemainingMonths,
+		arg.DueDay,
+		arg.IsSecured,
+		arg.IsRevolving,
+		arg.IsShortTerm,
+		arg.IsInterestBearing,
+		arg.FragmentationWeight,
+		arg.StressPriority,
+		arg.TreatmentClassification,
+		arg.EngineVersion,
+		arg.PolicyVersion,
+		arg.ExtraMetadata,
 	)
 	var i Debt
 	err := row.Scan(
@@ -110,7 +141,6 @@ func (q *Queries) CreateDebt(ctx context.Context, arg CreateDebtParams) (Debt, e
 		&i.LateFees,
 		&i.OtherCharges,
 		&i.DebtTaken,
-		&i.RiskLevel,
 		&i.DebtHealthScore,
 		&i.Priority,
 		&i.Notes,
@@ -119,46 +149,74 @@ func (q *Queries) CreateDebt(ctx context.Context, arg CreateDebtParams) (Debt, e
 		&i.AccruedInterest,
 		&i.LastAccrualDate,
 		&i.PaymentDueDay,
-		&i.EmiAmount,
-		&i.TenureMonths,
-		&i.MonthsPaid,
 		&i.MoratoriumUntil,
 		&i.InMoratorium,
+		&i.InstrumentType,
+		&i.InterestModel,
+		&i.MonthlyObligation,
+		&i.MinimumObligation,
+		&i.RemainingMonths,
+		&i.DueDay,
+		&i.IsSecured,
+		&i.IsRevolving,
+		&i.IsShortTerm,
+		&i.IsInterestBearing,
+		&i.FragmentationWeight,
+		&i.StressPriority,
+		&i.TreatmentClassification,
+		&i.EngineVersion,
+		&i.PolicyVersion,
+		&i.ExtraMetadata,
 	)
 	return i, err
+}
+
+const decrementRemainingMonthsAfterEMI = `-- name: DecrementRemainingMonthsAfterEMI :exec
+UPDATE debts
+SET remaining_months = CASE
+        WHEN remaining_months IS NOT NULL AND remaining_months > 0 THEN remaining_months - 1
+        ELSE remaining_months
+    END,
+    updated_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) DecrementRemainingMonthsAfterEMI(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, decrementRemainingMonthsAfterEMI, id)
+	return err
 }
 
 const exitMoratorium = `-- name: ExitMoratorium :exec
 UPDATE debts
 SET in_moratorium = FALSE,
-	emi_amount = $2,
-	updated_at = now()
+    monthly_obligation = $2,
+    updated_at = now()
 WHERE id = $1
 `
 
 type ExitMoratoriumParams struct {
-	ID        uuid.UUID
-	EmiAmount sql.NullString
+	ID                uuid.UUID
+	MonthlyObligation decimal.Decimal
 }
 
 func (q *Queries) ExitMoratorium(ctx context.Context, arg ExitMoratoriumParams) error {
-	_, err := q.db.ExecContext(ctx, exitMoratorium, arg.ID, arg.EmiAmount)
+	_, err := q.db.ExecContext(ctx, exitMoratorium, arg.ID, arg.MonthlyObligation)
 	return err
 }
 
 const getDebtBreakdownByType = `-- name: GetDebtBreakdownByType :many
-SELECT 
+SELECT
     type,
     COUNT(*) as count,
     COALESCE(SUM(outstanding_balance + accrued_interest), 0) as total_outstanding,
-    COALESCE(SUM(min_payment), 0) as total_min_payment,
-    CASE 
-        WHEN SUM(outstanding_balance) > 0 
+    COALESCE(SUM(minimum_obligation), 0) as total_min_payment,
+    CASE
+        WHEN SUM(outstanding_balance) > 0
         THEN ROUND((SUM(interest_rate * outstanding_balance) / SUM(outstanding_balance))::numeric, 5)
         ELSE 0
     END as avg_interest_rate
 FROM debts
-WHERE user_id = $1 
+WHERE user_id = $1
     AND outstanding_balance > 0
 GROUP BY type
 ORDER BY total_outstanding DESC
@@ -172,7 +230,7 @@ type GetDebtBreakdownByTypeRow struct {
 	AvgInterestRate  int32
 }
 
-// Breakdown of debts by type for visualization
+// Breakdown by legacy debt_type label (API compatibility).
 func (q *Queries) GetDebtBreakdownByType(ctx context.Context, userID uuid.UUID) ([]GetDebtBreakdownByTypeRow, error) {
 	rows, err := q.db.QueryContext(ctx, getDebtBreakdownByType, userID)
 	if err != nil {
@@ -203,7 +261,7 @@ func (q *Queries) GetDebtBreakdownByType(ctx context.Context, userID uuid.UUID) 
 }
 
 const getDebtByID = `-- name: GetDebtByID :one
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, moratorium_until, in_moratorium, instrument_type, interest_model, monthly_obligation, minimum_obligation, remaining_months, due_day, is_secured, is_revolving, is_short_term, is_interest_bearing, fragmentation_weight, stress_priority, treatment_classification, engine_version, policy_version, extra_metadata
 FROM debts
 WHERE id = $1 AND user_id = $2
 `
@@ -232,7 +290,6 @@ func (q *Queries) GetDebtByID(ctx context.Context, arg GetDebtByIDParams) (Debt,
 		&i.LateFees,
 		&i.OtherCharges,
 		&i.DebtTaken,
-		&i.RiskLevel,
 		&i.DebtHealthScore,
 		&i.Priority,
 		&i.Notes,
@@ -241,17 +298,30 @@ func (q *Queries) GetDebtByID(ctx context.Context, arg GetDebtByIDParams) (Debt,
 		&i.AccruedInterest,
 		&i.LastAccrualDate,
 		&i.PaymentDueDay,
-		&i.EmiAmount,
-		&i.TenureMonths,
-		&i.MonthsPaid,
 		&i.MoratoriumUntil,
 		&i.InMoratorium,
+		&i.InstrumentType,
+		&i.InterestModel,
+		&i.MonthlyObligation,
+		&i.MinimumObligation,
+		&i.RemainingMonths,
+		&i.DueDay,
+		&i.IsSecured,
+		&i.IsRevolving,
+		&i.IsShortTerm,
+		&i.IsInterestBearing,
+		&i.FragmentationWeight,
+		&i.StressPriority,
+		&i.TreatmentClassification,
+		&i.EngineVersion,
+		&i.PolicyVersion,
+		&i.ExtraMetadata,
 	)
 	return i, err
 }
 
 const getDebtForUpdate = `-- name: GetDebtForUpdate :one
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, moratorium_until, in_moratorium, instrument_type, interest_model, monthly_obligation, minimum_obligation, remaining_months, due_day, is_secured, is_revolving, is_short_term, is_interest_bearing, fragmentation_weight, stress_priority, treatment_classification, engine_version, policy_version, extra_metadata
 FROM debts
 WHERE id = $1 AND user_id = $2
 FOR UPDATE
@@ -281,7 +351,6 @@ func (q *Queries) GetDebtForUpdate(ctx context.Context, arg GetDebtForUpdatePara
 		&i.LateFees,
 		&i.OtherCharges,
 		&i.DebtTaken,
-		&i.RiskLevel,
 		&i.DebtHealthScore,
 		&i.Priority,
 		&i.Notes,
@@ -290,53 +359,60 @@ func (q *Queries) GetDebtForUpdate(ctx context.Context, arg GetDebtForUpdatePara
 		&i.AccruedInterest,
 		&i.LastAccrualDate,
 		&i.PaymentDueDay,
-		&i.EmiAmount,
-		&i.TenureMonths,
-		&i.MonthsPaid,
 		&i.MoratoriumUntil,
 		&i.InMoratorium,
+		&i.InstrumentType,
+		&i.InterestModel,
+		&i.MonthlyObligation,
+		&i.MinimumObligation,
+		&i.RemainingMonths,
+		&i.DueDay,
+		&i.IsSecured,
+		&i.IsRevolving,
+		&i.IsShortTerm,
+		&i.IsInterestBearing,
+		&i.FragmentationWeight,
+		&i.StressPriority,
+		&i.TreatmentClassification,
+		&i.EngineVersion,
+		&i.PolicyVersion,
+		&i.ExtraMetadata,
 	)
 	return i, err
 }
 
-const getDebtsByRiskLevel = `-- name: GetDebtsByRiskLevel :many
-SELECT 
-    risk_level,
+const getDebtsByTreatmentClassification = `-- name: GetDebtsByTreatmentClassification :many
+SELECT
+    treatment_classification,
     COUNT(*) as count,
     COALESCE(SUM(outstanding_balance + accrued_interest), 0) as total_outstanding,
     COALESCE(AVG(debt_health_score), 0) as avg_health_score
 FROM debts
-WHERE user_id = $1 
+WHERE user_id = $1
     AND outstanding_balance > 0
-    AND risk_level IS NOT NULL
-GROUP BY risk_level
-ORDER BY 
-    CASE risk_level
-        WHEN 'high' THEN 1
-        WHEN 'medium' THEN 2
-        WHEN 'low' THEN 3
-    END
+    AND treatment_classification IS NOT NULL
+GROUP BY treatment_classification
+ORDER BY treatment_classification
 `
 
-type GetDebtsByRiskLevelRow struct {
-	RiskLevel        NullRiskLevel
-	Count            int64
-	TotalOutstanding interface{}
-	AvgHealthScore   interface{}
+type GetDebtsByTreatmentClassificationRow struct {
+	TreatmentClassification sql.NullString
+	Count                   int64
+	TotalOutstanding        interface{}
+	AvgHealthScore          interface{}
 }
 
-// Group debts by risk level
-func (q *Queries) GetDebtsByRiskLevel(ctx context.Context, userID uuid.UUID) ([]GetDebtsByRiskLevelRow, error) {
-	rows, err := q.db.QueryContext(ctx, getDebtsByRiskLevel, userID)
+func (q *Queries) GetDebtsByTreatmentClassification(ctx context.Context, userID uuid.UUID) ([]GetDebtsByTreatmentClassificationRow, error) {
+	rows, err := q.db.QueryContext(ctx, getDebtsByTreatmentClassification, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetDebtsByRiskLevelRow
+	var items []GetDebtsByTreatmentClassificationRow
 	for rows.Next() {
-		var i GetDebtsByRiskLevelRow
+		var i GetDebtsByTreatmentClassificationRow
 		if err := rows.Scan(
-			&i.RiskLevel,
+			&i.TreatmentClassification,
 			&i.Count,
 			&i.TotalOutstanding,
 			&i.AvgHealthScore,
@@ -355,7 +431,7 @@ func (q *Queries) GetDebtsByRiskLevel(ctx context.Context, userID uuid.UUID) ([]
 }
 
 const listAllActiveDebts = `-- name: ListAllActiveDebts :many
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, moratorium_until, in_moratorium, instrument_type, interest_model, monthly_obligation, minimum_obligation, remaining_months, due_day, is_secured, is_revolving, is_short_term, is_interest_bearing, fragmentation_weight, stress_priority, treatment_classification, engine_version, policy_version, extra_metadata
 FROM debts
 WHERE outstanding_balance > 0 OR accrued_interest > 0
 `
@@ -385,7 +461,6 @@ func (q *Queries) ListAllActiveDebts(ctx context.Context) ([]Debt, error) {
 			&i.LateFees,
 			&i.OtherCharges,
 			&i.DebtTaken,
-			&i.RiskLevel,
 			&i.DebtHealthScore,
 			&i.Priority,
 			&i.Notes,
@@ -394,11 +469,24 @@ func (q *Queries) ListAllActiveDebts(ctx context.Context) ([]Debt, error) {
 			&i.AccruedInterest,
 			&i.LastAccrualDate,
 			&i.PaymentDueDay,
-			&i.EmiAmount,
-			&i.TenureMonths,
-			&i.MonthsPaid,
 			&i.MoratoriumUntil,
 			&i.InMoratorium,
+			&i.InstrumentType,
+			&i.InterestModel,
+			&i.MonthlyObligation,
+			&i.MinimumObligation,
+			&i.RemainingMonths,
+			&i.DueDay,
+			&i.IsSecured,
+			&i.IsRevolving,
+			&i.IsShortTerm,
+			&i.IsInterestBearing,
+			&i.FragmentationWeight,
+			&i.StressPriority,
+			&i.TreatmentClassification,
+			&i.EngineVersion,
+			&i.PolicyVersion,
+			&i.ExtraMetadata,
 		); err != nil {
 			return nil, err
 		}
@@ -414,12 +502,13 @@ func (q *Queries) ListAllActiveDebts(ctx context.Context) ([]Debt, error) {
 }
 
 const listLoansNeedingEMI = `-- name: ListLoansNeedingEMI :many
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, moratorium_until, in_moratorium, instrument_type, interest_model, monthly_obligation, minimum_obligation, remaining_months, due_day, is_secured, is_revolving, is_short_term, is_interest_bearing, fragmentation_weight, stress_priority, treatment_classification, engine_version, policy_version, extra_metadata
 FROM debts
-WHERE type IN ('personal_loan', 'student_loan', 'mortgage')
-	AND payment_due_day IS NOT NULL
-	AND outstanding_balance > 0
-	AND EXTRACT(DAY FROM CURRENT_DATE) = payment_due_day
+WHERE type NOT IN ('credit_card', 'bnpl')
+  AND interest_model IS DISTINCT FROM 'revolving'::interest_model
+  AND payment_due_day IS NOT NULL
+  AND outstanding_balance > 0
+  AND EXTRACT(DAY FROM CURRENT_DATE) = payment_due_day
 `
 
 func (q *Queries) ListLoansNeedingEMI(ctx context.Context) ([]Debt, error) {
@@ -447,7 +536,6 @@ func (q *Queries) ListLoansNeedingEMI(ctx context.Context) ([]Debt, error) {
 			&i.LateFees,
 			&i.OtherCharges,
 			&i.DebtTaken,
-			&i.RiskLevel,
 			&i.DebtHealthScore,
 			&i.Priority,
 			&i.Notes,
@@ -456,11 +544,24 @@ func (q *Queries) ListLoansNeedingEMI(ctx context.Context) ([]Debt, error) {
 			&i.AccruedInterest,
 			&i.LastAccrualDate,
 			&i.PaymentDueDay,
-			&i.EmiAmount,
-			&i.TenureMonths,
-			&i.MonthsPaid,
 			&i.MoratoriumUntil,
 			&i.InMoratorium,
+			&i.InstrumentType,
+			&i.InterestModel,
+			&i.MonthlyObligation,
+			&i.MinimumObligation,
+			&i.RemainingMonths,
+			&i.DueDay,
+			&i.IsSecured,
+			&i.IsRevolving,
+			&i.IsShortTerm,
+			&i.IsInterestBearing,
+			&i.FragmentationWeight,
+			&i.StressPriority,
+			&i.TreatmentClassification,
+			&i.EngineVersion,
+			&i.PolicyVersion,
+			&i.ExtraMetadata,
 		); err != nil {
 			return nil, err
 		}
@@ -476,7 +577,7 @@ func (q *Queries) ListLoansNeedingEMI(ctx context.Context) ([]Debt, error) {
 }
 
 const listUserDebts = `-- name: ListUserDebts :many
-SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, risk_level, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, emi_amount, tenure_months, months_paid, moratorium_until, in_moratorium
+SELECT id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, moratorium_until, in_moratorium, instrument_type, interest_model, monthly_obligation, minimum_obligation, remaining_months, due_day, is_secured, is_revolving, is_short_term, is_interest_bearing, fragmentation_weight, stress_priority, treatment_classification, engine_version, policy_version, extra_metadata
 FROM debts
 WHERE user_id = $1
 ORDER BY priority DESC, due_date ASC
@@ -507,7 +608,6 @@ func (q *Queries) ListUserDebts(ctx context.Context, userID uuid.UUID) ([]Debt, 
 			&i.LateFees,
 			&i.OtherCharges,
 			&i.DebtTaken,
-			&i.RiskLevel,
 			&i.DebtHealthScore,
 			&i.Priority,
 			&i.Notes,
@@ -516,11 +616,24 @@ func (q *Queries) ListUserDebts(ctx context.Context, userID uuid.UUID) ([]Debt, 
 			&i.AccruedInterest,
 			&i.LastAccrualDate,
 			&i.PaymentDueDay,
-			&i.EmiAmount,
-			&i.TenureMonths,
-			&i.MonthsPaid,
 			&i.MoratoriumUntil,
 			&i.InMoratorium,
+			&i.InstrumentType,
+			&i.InterestModel,
+			&i.MonthlyObligation,
+			&i.MinimumObligation,
+			&i.RemainingMonths,
+			&i.DueDay,
+			&i.IsSecured,
+			&i.IsRevolving,
+			&i.IsShortTerm,
+			&i.IsInterestBearing,
+			&i.FragmentationWeight,
+			&i.StressPriority,
+			&i.TreatmentClassification,
+			&i.EngineVersion,
+			&i.PolicyVersion,
+			&i.ExtraMetadata,
 		); err != nil {
 			return nil, err
 		}
@@ -616,17 +729,5 @@ type UpdateDebtHealthScoreParams struct {
 
 func (q *Queries) UpdateDebtHealthScore(ctx context.Context, arg UpdateDebtHealthScoreParams) error {
 	_, err := q.db.ExecContext(ctx, updateDebtHealthScore, arg.ID, arg.DebtHealthScore)
-	return err
-}
-
-const updateLoanPayment = `-- name: UpdateLoanPayment :exec
-UPDATE debts
-SET months_paid = months_paid + 1,
-	updated_at = now()
-WHERE id = $1
-`
-
-func (q *Queries) UpdateLoanPayment(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, updateLoanPayment, id)
 	return err
 }

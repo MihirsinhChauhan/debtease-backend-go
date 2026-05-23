@@ -45,7 +45,7 @@ SELECT
     -- Counts
     COUNT(*) as total_active_debts,
     COUNT(CASE WHEN is_overdue THEN 1 END) as overdue_count,
-    COUNT(CASE WHEN risk_level = 'high' THEN 1 END) as high_risk_count,
+    COUNT(CASE WHEN treatment_classification IN ('NEEDS_MONITORING', 'ACTIVELY_REDUCE') THEN 1 END) as high_risk_count,
     
     -- Expected Debt Free
     CASE 

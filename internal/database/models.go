@@ -16,6 +16,58 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+type DebtInstrumentType string
+
+const (
+	DebtInstrumentTypeHomeLoan      DebtInstrumentType = "home_loan"
+	DebtInstrumentTypeCarLoan       DebtInstrumentType = "car_loan"
+	DebtInstrumentTypeGoldLoan      DebtInstrumentType = "gold_loan"
+	DebtInstrumentTypePersonalLoan  DebtInstrumentType = "personal_loan"
+	DebtInstrumentTypeEducationLoan DebtInstrumentType = "education_loan"
+	DebtInstrumentTypeMedicalLoan   DebtInstrumentType = "medical_loan"
+	DebtInstrumentTypeConsumerEmi   DebtInstrumentType = "consumer_emi"
+	DebtInstrumentTypeBnpl          DebtInstrumentType = "bnpl"
+	DebtInstrumentTypeSalaryAdvance DebtInstrumentType = "salary_advance"
+	DebtInstrumentTypePayLater      DebtInstrumentType = "pay_later"
+	DebtInstrumentTypeCreditCard    DebtInstrumentType = "credit_card"
+	DebtInstrumentTypeLineOfCredit  DebtInstrumentType = "line_of_credit"
+)
+
+func (e *DebtInstrumentType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DebtInstrumentType(s)
+	case string:
+		*e = DebtInstrumentType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DebtInstrumentType: %T", src)
+	}
+	return nil
+}
+
+type NullDebtInstrumentType struct {
+	DebtInstrumentType DebtInstrumentType
+	Valid              bool // Valid is true if DebtInstrumentType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDebtInstrumentType) Scan(value interface{}) error {
+	if value == nil {
+		ns.DebtInstrumentType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DebtInstrumentType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDebtInstrumentType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DebtInstrumentType), nil
+}
+
 type DebtType string
 
 const (
@@ -64,6 +116,50 @@ func (ns NullDebtType) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.DebtType), nil
+}
+
+type InterestModel string
+
+const (
+	InterestModelFixed       InterestModel = "fixed"
+	InterestModelFloating    InterestModel = "floating"
+	InterestModelZeroCostEmi InterestModel = "zero_cost_emi"
+	InterestModelRevolving   InterestModel = "revolving"
+)
+
+func (e *InterestModel) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = InterestModel(s)
+	case string:
+		*e = InterestModel(s)
+	default:
+		return fmt.Errorf("unsupported scan type for InterestModel: %T", src)
+	}
+	return nil
+}
+
+type NullInterestModel struct {
+	InterestModel InterestModel
+	Valid         bool // Valid is true if InterestModel is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullInterestModel) Scan(value interface{}) error {
+	if value == nil {
+		ns.InterestModel, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.InterestModel.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullInterestModel) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.InterestModel), nil
 }
 
 type PaymentFreq string
@@ -153,49 +249,6 @@ func (ns NullPaymentType) Value() (driver.Value, error) {
 	return string(ns.PaymentType), nil
 }
 
-type RiskLevel string
-
-const (
-	RiskLevelLow    RiskLevel = "low"
-	RiskLevelMedium RiskLevel = "medium"
-	RiskLevelHigh   RiskLevel = "high"
-)
-
-func (e *RiskLevel) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = RiskLevel(s)
-	case string:
-		*e = RiskLevel(s)
-	default:
-		return fmt.Errorf("unsupported scan type for RiskLevel: %T", src)
-	}
-	return nil
-}
-
-type NullRiskLevel struct {
-	RiskLevel RiskLevel
-	Valid     bool // Valid is true if RiskLevel is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullRiskLevel) Scan(value interface{}) error {
-	if value == nil {
-		ns.RiskLevel, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.RiskLevel.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullRiskLevel) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.RiskLevel), nil
-}
-
 type CalculationEvent struct {
 	ID        uuid.UUID
 	SessionID uuid.UUID
@@ -238,59 +291,89 @@ type CreditCard struct {
 	InGracePeriod     bool
 	CreatedAt         sql.NullTime
 	UpdatedAt         sql.NullTime
+	MinimumDue        decimal.Decimal
 }
 
 type Debt struct {
-	ID                 uuid.UUID
-	UserID             uuid.UUID
-	Name               string
-	Type               DebtType
-	Lender             sql.NullString
-	PrincipalDecimal   decimal.Decimal
-	OutstandingBalance decimal.Decimal
-	InterestRate       decimal.Decimal
-	MinPayment         decimal.Decimal
-	DueDate            time.Time
-	PaymentFrequency   NullPaymentFreq
-	IsOverdue          sql.NullBool
-	LateFees           sql.NullString
-	OtherCharges       sql.NullString
-	DebtTaken          sql.NullTime
-	RiskLevel          NullRiskLevel
-	DebtHealthScore    sql.NullString
-	Priority           sql.NullInt16
-	Notes              sql.NullString
-	CreatedAt          sql.NullTime
-	UpdatedAt          sql.NullTime
-	AccruedInterest    decimal.Decimal
-	LastAccrualDate    time.Time
-	PaymentDueDay      sql.NullInt32
-	EmiAmount          sql.NullString
-	TenureMonths       sql.NullInt32
-	MonthsPaid         sql.NullInt32
-	MoratoriumUntil    sql.NullTime
-	InMoratorium       sql.NullBool
+	ID                      uuid.UUID
+	UserID                  uuid.UUID
+	Name                    string
+	Type                    DebtType
+	Lender                  sql.NullString
+	PrincipalDecimal        decimal.Decimal
+	OutstandingBalance      decimal.Decimal
+	InterestRate            decimal.Decimal
+	MinPayment              decimal.Decimal
+	DueDate                 time.Time
+	PaymentFrequency        NullPaymentFreq
+	IsOverdue               sql.NullBool
+	LateFees                sql.NullString
+	OtherCharges            sql.NullString
+	DebtTaken               sql.NullTime
+	DebtHealthScore         sql.NullString
+	Priority                sql.NullInt16
+	Notes                   sql.NullString
+	CreatedAt               sql.NullTime
+	UpdatedAt               sql.NullTime
+	AccruedInterest         decimal.Decimal
+	LastAccrualDate         time.Time
+	PaymentDueDay           sql.NullInt32
+	MoratoriumUntil         sql.NullTime
+	InMoratorium            sql.NullBool
+	InstrumentType          DebtInstrumentType
+	InterestModel           InterestModel
+	MonthlyObligation       decimal.Decimal
+	MinimumObligation       decimal.Decimal
+	RemainingMonths         sql.NullInt32
+	DueDay                  sql.NullInt32
+	IsSecured               bool
+	IsRevolving             bool
+	IsShortTerm             bool
+	IsInterestBearing       bool
+	FragmentationWeight     decimal.Decimal
+	StressPriority          int16
+	TreatmentClassification sql.NullString
+	EngineVersion           string
+	PolicyVersion           string
+	ExtraMetadata           pqtype.NullRawMessage
+}
+
+type FinancialEvent struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	EventType     string
+	EntityType    string
+	EntityID      uuid.NullUUID
+	Amount        sql.NullString
+	Currency      string
+	OccurredAt    time.Time
+	Metadata      json.RawMessage
+	CreatedAt     time.Time
+	SchemaVersion int16
 }
 
 type FinancialSnapshot struct {
-	ID               uuid.UUID
-	UserID           uuid.NullUUID
-	SessionID        uuid.NullUUID
-	SnapshotType     string
-	SnapshotSource   string
-	MonthlyIncome    decimal.Decimal
-	OtherIncome      decimal.Decimal
-	FixedExpenses    decimal.Decimal
-	VariableExpenses decimal.Decimal
-	SavingsCash      decimal.Decimal
-	InvestmentsValue decimal.Decimal
-	TotalMonthlyEmi  decimal.Decimal
-	TotalDebtBalance decimal.Decimal
-	DependentsCount  sql.NullInt32
-	TriggerEvent     sql.NullString
-	SnapshotVersion  int32
-	ExtraData        json.RawMessage
-	CreatedAt        time.Time
+	ID                         uuid.UUID
+	UserID                     uuid.NullUUID
+	SessionID                  uuid.NullUUID
+	SnapshotType               string
+	SnapshotSource             string
+	MonthlyIncome              decimal.Decimal
+	OtherIncome                decimal.Decimal
+	FixedExpenses              decimal.Decimal
+	VariableExpenses           decimal.Decimal
+	SavingsCash                decimal.Decimal
+	InvestmentsValue           decimal.Decimal
+	TotalMonthlyEmi            decimal.Decimal
+	TotalDebtBalance           decimal.Decimal
+	DependentsCount            sql.NullInt32
+	TriggerEvent               sql.NullString
+	SnapshotVersion            int32
+	ExtraData                  json.RawMessage
+	CreatedAt                  time.Time
+	UnsecuredMonthlyObligation decimal.Decimal
+	RevolvingMonthlyObligation decimal.Decimal
+	ShortTermObligations       decimal.Decimal
 }
 
 type LeadEmail struct {
@@ -339,11 +422,13 @@ type RefreshToken struct {
 
 type User struct {
 	ID            uuid.UUID
-	Name          string
 	Email         string
-	PasswordHash  string
+	PasswordHash  sql.NullString
 	MonthlyIncome decimal.Decimal
 	IsActive      sql.NullBool
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	FirstName     string
+	LastName      string
+	GoogleID      sql.NullString
 }

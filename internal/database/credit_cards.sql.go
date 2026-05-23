@@ -55,11 +55,11 @@ func (q *Queries) ApplyCreditCardPayment(ctx context.Context, arg ApplyCreditCar
 const createCreditCard = `-- name: CreateCreditCard :one
 INSERT INTO credit_cards (
 	debt_id, billing_day, grace_period_days, min_payment_percent,
-	billed_balance, unbilled_balance, in_grace_period
+	billed_balance, unbilled_balance, in_grace_period, minimum_due
 ) VALUES (
-	$1, $2, $3, $4, $5, $6, $7
+	$1, $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING debt_id, billing_day, grace_period_days, min_payment_percent, last_statement_date, payment_due_date, billed_balance, unbilled_balance, in_grace_period, created_at, updated_at
+RETURNING debt_id, billing_day, grace_period_days, min_payment_percent, last_statement_date, payment_due_date, billed_balance, unbilled_balance, in_grace_period, created_at, updated_at, minimum_due
 `
 
 type CreateCreditCardParams struct {
@@ -70,6 +70,7 @@ type CreateCreditCardParams struct {
 	BilledBalance     decimal.Decimal
 	UnbilledBalance   decimal.Decimal
 	InGracePeriod     bool
+	MinimumDue        decimal.Decimal
 }
 
 func (q *Queries) CreateCreditCard(ctx context.Context, arg CreateCreditCardParams) (CreditCard, error) {
@@ -81,6 +82,7 @@ func (q *Queries) CreateCreditCard(ctx context.Context, arg CreateCreditCardPara
 		arg.BilledBalance,
 		arg.UnbilledBalance,
 		arg.InGracePeriod,
+		arg.MinimumDue,
 	)
 	var i CreditCard
 	err := row.Scan(
@@ -95,6 +97,7 @@ func (q *Queries) CreateCreditCard(ctx context.Context, arg CreateCreditCardPara
 		&i.InGracePeriod,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MinimumDue,
 	)
 	return i, err
 }
@@ -122,7 +125,7 @@ func (q *Queries) GenerateStatement(ctx context.Context, arg GenerateStatementPa
 }
 
 const getCreditCardByDebtID = `-- name: GetCreditCardByDebtID :one
-SELECT debt_id, billing_day, grace_period_days, min_payment_percent, last_statement_date, payment_due_date, billed_balance, unbilled_balance, in_grace_period, created_at, updated_at FROM credit_cards
+SELECT debt_id, billing_day, grace_period_days, min_payment_percent, last_statement_date, payment_due_date, billed_balance, unbilled_balance, in_grace_period, created_at, updated_at, minimum_due FROM credit_cards
 WHERE debt_id = $1
 `
 
@@ -141,12 +144,13 @@ func (q *Queries) GetCreditCardByDebtID(ctx context.Context, debtID uuid.UUID) (
 		&i.InGracePeriod,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MinimumDue,
 	)
 	return i, err
 }
 
 const listCreditCardsNeedingStatement = `-- name: ListCreditCardsNeedingStatement :many
-SELECT cc.debt_id, cc.billing_day, cc.grace_period_days, cc.min_payment_percent, cc.last_statement_date, cc.payment_due_date, cc.billed_balance, cc.unbilled_balance, cc.in_grace_period, cc.created_at, cc.updated_at, d.user_id, d.name, d.outstanding_balance
+SELECT cc.debt_id, cc.billing_day, cc.grace_period_days, cc.min_payment_percent, cc.last_statement_date, cc.payment_due_date, cc.billed_balance, cc.unbilled_balance, cc.in_grace_period, cc.created_at, cc.updated_at, cc.minimum_due, d.user_id, d.name, d.outstanding_balance
 FROM credit_cards cc
 JOIN debts d ON cc.debt_id = d.id
 WHERE EXTRACT(DAY FROM CURRENT_DATE) = cc.billing_day
@@ -165,6 +169,7 @@ type ListCreditCardsNeedingStatementRow struct {
 	InGracePeriod      bool
 	CreatedAt          sql.NullTime
 	UpdatedAt          sql.NullTime
+	MinimumDue         decimal.Decimal
 	UserID             uuid.UUID
 	Name               string
 	OutstandingBalance decimal.Decimal
@@ -191,6 +196,7 @@ func (q *Queries) ListCreditCardsNeedingStatement(ctx context.Context) ([]ListCr
 			&i.InGracePeriod,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MinimumDue,
 			&i.UserID,
 			&i.Name,
 			&i.OutstandingBalance,
@@ -209,7 +215,7 @@ func (q *Queries) ListCreditCardsNeedingStatement(ctx context.Context) ([]ListCr
 }
 
 const listCreditCardsOutOfGrace = `-- name: ListCreditCardsOutOfGrace :many
-SELECT cc.debt_id, cc.billing_day, cc.grace_period_days, cc.min_payment_percent, cc.last_statement_date, cc.payment_due_date, cc.billed_balance, cc.unbilled_balance, cc.in_grace_period, cc.created_at, cc.updated_at, d.user_id, d.name, d.outstanding_balance, d.interest_rate, d.last_accrual_date
+SELECT cc.debt_id, cc.billing_day, cc.grace_period_days, cc.min_payment_percent, cc.last_statement_date, cc.payment_due_date, cc.billed_balance, cc.unbilled_balance, cc.in_grace_period, cc.created_at, cc.updated_at, cc.minimum_due, d.user_id, d.name, d.outstanding_balance, d.interest_rate, d.last_accrual_date
 FROM credit_cards cc
 JOIN debts d ON cc.debt_id = d.id
 WHERE cc.in_grace_period = FALSE
@@ -228,6 +234,7 @@ type ListCreditCardsOutOfGraceRow struct {
 	InGracePeriod      bool
 	CreatedAt          sql.NullTime
 	UpdatedAt          sql.NullTime
+	MinimumDue         decimal.Decimal
 	UserID             uuid.UUID
 	Name               string
 	OutstandingBalance decimal.Decimal
@@ -256,6 +263,7 @@ func (q *Queries) ListCreditCardsOutOfGrace(ctx context.Context) ([]ListCreditCa
 			&i.InGracePeriod,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MinimumDue,
 			&i.UserID,
 			&i.Name,
 			&i.OutstandingBalance,
