@@ -20,4 +20,7 @@ type Config struct {
 	GoogleClientSecret         string
 	GoogleRedirectURL          string // Must match an Authorized redirect URI in Google Cloud Console
 	GoogleLoginSuccessRedirect string // After browser OAuth, optional frontend URL to receive tokens in query params
+
+	// AdminEmails is a comma-separated allowlist from ADMIN_EMAILS (lowercase compare at runtime).
+	AdminEmails []string
 }
