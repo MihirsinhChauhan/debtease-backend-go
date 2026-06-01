@@ -5,6 +5,13 @@ import (
 
 	"DebtEase/internal/database"
 	"DebtEase/internal/models"
+
+	"github.com/shopspring/decimal"
+)
+
+var (
+	incomeShock10 = decimal.RequireFromString("0.9")
+	incomeShock20 = decimal.RequireFromString("0.8")
 )
 
 // MergePortfolioRollupIntoHealthInput overlays live portfolio EMI load and active debt count onto snapshot-derived input.
@@ -42,4 +49,29 @@ func FinancialSimulationFromMergedHealthInput(hin health_v1.HealthScoreInput) *m
 		out.InvestmentsValue = &v
 	}
 	return &out
+}
+
+// IncomeStressPreviewFromHealthInput re-runs health_v1 at full, −10%, and −20% income.
+func IncomeStressPreviewFromHealthInput(hin health_v1.HealthScoreInput) models.IncomeStressPreview {
+	current := health_v1.Run(hin)
+
+	shock10 := hin
+	shock10.MonthlyIncome = hin.MonthlyIncome.Mul(incomeShock10)
+	result10 := health_v1.Run(shock10)
+
+	shock20 := hin
+	shock20.MonthlyIncome = hin.MonthlyIncome.Mul(incomeShock20)
+	result20 := health_v1.Run(shock20)
+
+	primaryReason := ""
+	if len(current.Drivers) > 0 {
+		primaryReason = current.Drivers[0]
+	}
+
+	return models.IncomeStressPreview{
+		CurrentStatus: string(current.Status),
+		Shock10Status: string(result10.Status),
+		Shock20Status: string(result20.Status),
+		PrimaryReason: primaryReason,
+	}
 }

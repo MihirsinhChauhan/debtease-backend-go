@@ -168,6 +168,10 @@ func main() {
 		getDebt := handlers.HandleGetDebt(cfg)
 		mux.Handle("GET /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, getDebt)))
 
+		// PATCH /api/debts/{id}
+		updateDebt := handlers.HandleUpdateDebt(cfg)
+		mux.Handle("PATCH /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, updateDebt)))
+
 		// PATCH /api/debts/{id}/balance
 		updateBalance := handlers.HandleUpdateDebtBalance(cfg)
 		mux.Handle("PATCH /api/debts/{id}/balance", middleware.Logging(middleware.AuthRequired(cfg, updateBalance)))

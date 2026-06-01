@@ -161,6 +161,8 @@ func HandleGetDashboard(cfg *api.Config) http.HandlerFunc {
 					CapturedAt:        snap.CreatedAt,
 				}
 				response.FinancialSnapshotForSimulation = projections.FinancialSimulationFromMergedHealthInput(hin)
+				preview := projections.IncomeStressPreviewFromHealthInput(hin)
+				response.IncomeStressPreview = &preview
 			} else {
 				logger.Logger.Warnw("HealthInputFromFinancialSnapshot failed for dashboard", "error", err2, "userID", userID)
 			}

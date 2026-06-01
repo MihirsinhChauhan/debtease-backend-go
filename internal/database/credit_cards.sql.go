@@ -308,3 +308,29 @@ func (q *Queries) UpdateCreditCardBalances(ctx context.Context, arg UpdateCredit
 	)
 	return err
 }
+
+const updateCreditCardDetails = `-- name: UpdateCreditCardDetails :exec
+UPDATE credit_cards
+SET billing_day = $2,
+    grace_period_days = $3,
+    minimum_due = $4,
+    updated_at = now()
+WHERE debt_id = $1
+`
+
+type UpdateCreditCardDetailsParams struct {
+	DebtID          uuid.UUID
+	BillingDay      int32
+	GracePeriodDays int32
+	MinimumDue      decimal.Decimal
+}
+
+func (q *Queries) UpdateCreditCardDetails(ctx context.Context, arg UpdateCreditCardDetailsParams) error {
+	_, err := q.db.ExecContext(ctx, updateCreditCardDetails,
+		arg.DebtID,
+		arg.BillingDay,
+		arg.GracePeriodDays,
+		arg.MinimumDue,
+	)
+	return err
+}

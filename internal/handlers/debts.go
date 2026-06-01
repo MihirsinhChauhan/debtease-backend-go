@@ -428,6 +428,201 @@ func HandleUpdateDebtHealth(cfg *api.Config) http.HandlerFunc {
 	}
 }
 
+func HandleUpdateDebt(cfg *api.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := getUserIDFromContext(r.Context())
+		if !ok {
+			utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+
+		idStr := r.PathValue("id")
+		debtID, err := uuid.Parse(idStr)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid id")
+			return
+		}
+
+		var req models.UpdateDebtRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid JSON")
+			return
+		}
+
+		ctx := context.Background()
+		existing, err := cfg.DB.GetDebtByID(ctx, database.GetDebtByIDParams{ID: debtID, UserID: userID})
+		if err != nil {
+			if err == sql.ErrNoRows {
+				utils.RespondWithError(w, http.StatusNotFound, "Debt not found")
+				return
+			}
+			logger.Logger.Errorw("GetDebtByID failed", "error", err)
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to load debt")
+			return
+		}
+
+		name := existing.Name
+		if req.Name != nil && *req.Name != "" {
+			name = *req.Name
+		}
+
+		lender := existing.Lender
+		if req.Lender != nil {
+			lender = sql.NullString{String: *req.Lender, Valid: *req.Lender != ""}
+		}
+
+		principal := existing.PrincipalDecimal
+		if req.Principal != nil {
+			principal = *req.Principal
+		}
+
+		outstanding := existing.OutstandingBalance
+		if req.OutstandingBalance != nil {
+			outstanding = *req.OutstandingBalance
+		}
+
+		interestRate := existing.InterestRate
+		if req.InterestRate != nil {
+			interestRate = *req.InterestRate
+		}
+
+		minPayment := existing.MinPayment
+		if req.MinPayment != nil {
+			minPayment = *req.MinPayment
+		}
+
+		dueDate := existing.DueDate
+		if req.DueDate != nil {
+			dueDate = *req.DueDate
+		}
+
+		notes := existing.Notes
+		if req.Notes != nil {
+			notes = sql.NullString{String: *req.Notes, Valid: *req.Notes != ""}
+		}
+
+		paymentDueDay := existing.PaymentDueDay
+		if req.PaymentDueDay != nil {
+			paymentDueDay = sql.NullInt32{Int32: *req.PaymentDueDay, Valid: true}
+		}
+
+		var tenureMonths *int32
+		if existing.RemainingMonths.Valid {
+			v := existing.RemainingMonths.Int32
+			tenureMonths = &v
+		}
+		if req.TenureMonths != nil {
+			tenureMonths = req.TenureMonths
+		}
+
+		emiAmount := req.EMIAmount
+		if emiAmount == nil && !minPayment.IsZero() {
+			v := minPayment
+			emiAmount = &v
+		}
+
+		var paymentDueDayPtr *int32
+		if paymentDueDay.Valid {
+			v := paymentDueDay.Int32
+			paymentDueDayPtr = &v
+		}
+
+		obl := debt.NormalizeCreate(debt.CreateObligationInput{
+			DebtType:      existing.Type,
+			InterestRate:  interestRate,
+			MinPayment:    minPayment,
+			Principal:     principal,
+			EMIAmount:     emiAmount,
+			TenureMonths:  tenureMonths,
+			PaymentDueDay: paymentDueDayPtr,
+			DueDate:       dueDate,
+		})
+
+		if cfg.DBPool == nil {
+			logger.Logger.Errorw("DBPool not configured")
+			utils.RespondWithError(w, http.StatusInternalServerError, "Server misconfiguration")
+			return
+		}
+
+		tx, err := cfg.DBPool.BeginTx(ctx, nil)
+		if err != nil {
+			logger.Logger.Errorw("BeginTx failed", "error", err)
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update debt")
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		qtx := cfg.DB.WithTx(tx)
+
+		updated, err := qtx.UpdateDebtDetails(ctx, database.UpdateDebtDetailsParams{
+			ID:                 debtID,
+			UserID:             userID,
+			Name:               name,
+			Lender:             lender,
+			PrincipalDecimal:   principal,
+			OutstandingBalance: outstanding,
+			InterestRate:       interestRate,
+			MinPayment:         minPayment,
+			DueDate:            dueDate,
+			Notes:              notes,
+			PaymentDueDay:      paymentDueDay,
+			MonthlyObligation:  obl.MonthlyObligation,
+			MinimumObligation:  obl.MinimumObligation,
+			RemainingMonths:    obl.RemainingMonths,
+			DueDay:             obl.DueDay,
+			IsInterestBearing:  obl.IsInterestBearing,
+		})
+		if err != nil {
+			logger.Logger.Errorw("UpdateDebtDetails failed", "error", err)
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update debt")
+			return
+		}
+
+		if existing.Type == database.DebtTypeCreditCard {
+			cc, ccErr := qtx.GetCreditCardByDebtID(ctx, debtID)
+			if ccErr != nil && ccErr != sql.ErrNoRows {
+				logger.Logger.Errorw("GetCreditCardByDebtID failed", "error", ccErr)
+				utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update debt")
+				return
+			}
+			if ccErr == nil {
+				billingDay := cc.BillingDay
+				if req.BillingDay != nil {
+					billingDay = *req.BillingDay
+				}
+				graceDays := cc.GracePeriodDays
+				if req.GracePeriodDays != nil {
+					graceDays = *req.GracePeriodDays
+				}
+				if err := qtx.UpdateCreditCardDetails(ctx, database.UpdateCreditCardDetailsParams{
+					DebtID:          debtID,
+					BillingDay:      billingDay,
+					GracePeriodDays: graceDays,
+					MinimumDue:      minPayment,
+				}); err != nil {
+					logger.Logger.Errorw("UpdateCreditCardDetails failed", "error", err)
+					utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update debt")
+					return
+				}
+			}
+		}
+
+		if err := projections.RegenerateAutoGeneratedFinancialSnapshot(ctx, qtx, userID, financial_events.EventBalanceManuallyAdjusted); err != nil {
+			logger.Logger.Errorw("snapshot regeneration failed", "error", err)
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update debt")
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			logger.Logger.Errorw("Commit failed", "error", err)
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update debt")
+			return
+		}
+
+		utils.RespondWithJSON(w, http.StatusOK, toDebtResponse(updated))
+	}
+}
+
 func HandleMarkDebtOverdue(cfg *api.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := getUserIDFromContext(r.Context()); !ok {

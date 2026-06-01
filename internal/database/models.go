@@ -338,6 +338,16 @@ type Debt struct {
 	ExtraMetadata           pqtype.NullRawMessage
 }
 
+type FinanceStep struct {
+	SessionID        uuid.UUID
+	MonthlyIncome    sql.NullString
+	FixedObligations sql.NullString
+	Loans            json.RawMessage
+	EngineVersion    sql.NullString
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 type FinancialEvent struct {
 	ID            uuid.UUID
 	UserID        uuid.UUID

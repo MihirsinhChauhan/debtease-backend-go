@@ -163,6 +163,12 @@ func redirectWithTokens(w http.ResponseWriter, r *http.Request, redirectBase str
 	q := u.Query()
 	q.Set("access_token", resp.Token)
 	q.Set("refresh_token", resp.RefreshToken)
+	q.Set("id", resp.ID.String())
+	q.Set("email", resp.Email)
+	q.Set("first_name", resp.FirstName)
+	q.Set("last_name", resp.LastName)
+	q.Set("created_at", resp.CreatedAt)
+	q.Set("updated_at", resp.UpdatedAt)
 	u.RawQuery = q.Encode()
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
