@@ -249,6 +249,19 @@ func (ns NullPaymentType) Value() (driver.Value, error) {
 	return string(ns.PaymentType), nil
 }
 
+type AnalysisFeedback struct {
+	ID               uuid.UUID
+	UserID           uuid.NullUUID
+	SessionID        uuid.NullUUID
+	SeqScore         sql.NullInt16
+	TrustScore       sql.NullInt16
+	AccuracyFeedback sql.NullString
+	FeedbackText     sql.NullString
+	ScreenName       string
+	ContextMetadata  pqtype.NullRawMessage
+	CreatedAt        time.Time
+}
+
 type CalculationEvent struct {
 	ID        uuid.UUID
 	SessionID uuid.UUID
@@ -340,8 +353,8 @@ type Debt struct {
 
 type FinanceStep struct {
 	SessionID        uuid.UUID
-	MonthlyIncome    sql.NullString
-	FixedObligations sql.NullString
+	MonthlyIncome    decimal.NullDecimal
+	FixedObligations decimal.NullDecimal
 	Loans            json.RawMessage
 	EngineVersion    sql.NullString
 	CreatedAt        time.Time

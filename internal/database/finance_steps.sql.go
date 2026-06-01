@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 const deleteFinanceStepsBySessionID = `-- name: DeleteFinanceStepsBySessionID :exec
@@ -55,8 +56,8 @@ RETURNING session_id, monthly_income, fixed_obligations, loans, engine_version, 
 
 type UpsertFinanceStepsParams struct {
 	SessionID        uuid.UUID
-	MonthlyIncome    sql.NullString
-	FixedObligations sql.NullString
+	MonthlyIncome    decimal.NullDecimal
+	FixedObligations decimal.NullDecimal
 	Loans            json.RawMessage
 	EngineVersion    sql.NullString
 }

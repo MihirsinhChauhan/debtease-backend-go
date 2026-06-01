@@ -206,6 +206,9 @@ func main() {
 		createEvent := webapp_handlers.HandleCreateEvent(cfg)
 		mux.Handle("POST /api/events", middleware.Logging(createEvent))
 
+		createFeedback := webapp_handlers.HandleCreateFeedback(cfg)
+		mux.Handle("POST /api/feedback", middleware.Logging(createFeedback))
+
 		pdfRequest := webapp_handlers.HandlePdfRequest(cfg)
 		mux.Handle("POST /api/pdf-request", middleware.Logging(pdfRequest))
 
