@@ -94,6 +94,13 @@ func main() {
 	// 	}
 	// }
 
+	adminEmails := parseAdminEmails(os.Getenv("ADMIN_EMAILS"))
+	if len(adminEmails) == 0 {
+		logger.Logger.Warnw("ADMIN_EMAILS is empty — no users can access /admin")
+	} else {
+		logger.Logger.Infow("Admin allowlist loaded", "count", len(adminEmails))
+	}
+
 	// Initialize config
 	cfg := &api.Config{
 		DB:                         dbQueries,
@@ -104,6 +111,7 @@ func main() {
 		GoogleClientSecret:         strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET")),
 		GoogleRedirectURL:          strings.TrimSpace(os.Getenv("GOOGLE_REDIRECT_URL")),
 		GoogleLoginSuccessRedirect: strings.TrimSpace(os.Getenv("GOOGLE_LOGIN_SUCCESS_REDIRECT")),
+		AdminEmails:                adminEmails,
 		// RabbitMQURL: rabbitmqURL,
 	}
 
@@ -122,10 +130,30 @@ func main() {
 	// fileServer := http.FileServer(http.Dir("."))
 	// mux.Handle("/app/", middleware.Logging(middleware.MetricsInc(cfg, http.StripPrefix("/app", fileServer))))
 
-	// Admin
-	// mux.HandleFunc("GET /admin/metrics", handlers.HandleMetrics(cfg))
+	// Admin (JWT + ADMIN_EMAILS allowlist)
+	adminMe := webapp_handlers.HandleAdminMe(cfg)
+	mux.Handle("GET /api/admin/me", middleware.Logging(middleware.AuthRequired(cfg, adminMe)))
+
 	getAnalytics := webapp_handlers.HandleGetAnalytics(cfg)
-	mux.Handle("GET /api/admin/analytics", middleware.Logging(getAnalytics))
+	mux.Handle("GET /api/admin/analytics", middleware.Logging(middleware.AdminAuth(cfg, getAnalytics)))
+
+	adminOverview := webapp_handlers.HandleAdminOverview(cfg)
+	mux.Handle("GET /api/admin/overview", middleware.Logging(middleware.AdminAuth(cfg, adminOverview)))
+
+	adminFeedbackList := webapp_handlers.HandleAdminFeedbackList(cfg)
+	mux.Handle("GET /api/admin/feedback", middleware.Logging(middleware.AdminAuth(cfg, adminFeedbackList)))
+
+	adminFeedbackSummary := webapp_handlers.HandleAdminFeedbackSummary(cfg)
+	mux.Handle("GET /api/admin/feedback/summary", middleware.Logging(middleware.AdminAuth(cfg, adminFeedbackSummary)))
+
+	adminUserSearch := webapp_handlers.HandleAdminUserSearch(cfg)
+	mux.Handle("GET /api/admin/users", middleware.Logging(middleware.AdminAuth(cfg, adminUserSearch)))
+
+	adminUserDetail := webapp_handlers.HandleAdminUserDetail(cfg)
+	mux.Handle("GET /api/admin/users/{id}", middleware.Logging(middleware.AdminAuth(cfg, adminUserDetail)))
+
+	adminSessionDetail := webapp_handlers.HandleAdminSessionDetail(cfg)
+	mux.Handle("GET /api/admin/sessions/{session_id}", middleware.Logging(middleware.AdminAuth(cfg, adminSessionDetail)))
 
 	// auth
 	mux.HandleFunc("POST /api/login", handlers.HandleLogin(cfg))
@@ -168,6 +196,10 @@ func main() {
 		getDebt := handlers.HandleGetDebt(cfg)
 		mux.Handle("GET /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, getDebt)))
 
+		// PATCH /api/debts/{id}
+		updateDebt := handlers.HandleUpdateDebt(cfg)
+		mux.Handle("PATCH /api/debts/{id}", middleware.Logging(middleware.AuthRequired(cfg, updateDebt)))
+
 		// PATCH /api/debts/{id}/balance
 		updateBalance := handlers.HandleUpdateDebtBalance(cfg)
 		mux.Handle("PATCH /api/debts/{id}/balance", middleware.Logging(middleware.AuthRequired(cfg, updateBalance)))
@@ -201,6 +233,9 @@ func main() {
 
 		createEvent := webapp_handlers.HandleCreateEvent(cfg)
 		mux.Handle("POST /api/events", middleware.Logging(createEvent))
+
+		createFeedback := webapp_handlers.HandleCreateFeedback(cfg)
+		mux.Handle("POST /api/feedback", middleware.Logging(createFeedback))
 
 		pdfRequest := webapp_handlers.HandlePdfRequest(cfg)
 		mux.Handle("POST /api/pdf-request", middleware.Logging(pdfRequest))
@@ -240,4 +275,21 @@ func main() {
 	// Start server
 	logger.Logger.Infow("Server starting", "port", port, "platform", platform)
 	logger.Logger.Fatal(http.ListenAndServe(":"+port, mux))
+}
+
+func parseAdminEmails(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		p = strings.Trim(p, `"'`)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

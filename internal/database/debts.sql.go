@@ -716,6 +716,112 @@ func (q *Queries) UpdateDebtBalance(ctx context.Context, arg UpdateDebtBalancePa
 	return err
 }
 
+const updateDebtDetails = `-- name: UpdateDebtDetails :one
+UPDATE debts
+SET name = $3,
+    lender = $4,
+    principal_decimal = $5,
+    outstanding_balance = $6,
+    interest_rate = $7,
+    min_payment = $8,
+    due_date = $9,
+    notes = $10,
+    payment_due_day = $11,
+    monthly_obligation = $12,
+    minimum_obligation = $13,
+    remaining_months = $14,
+    due_day = $15,
+    is_interest_bearing = $16,
+    updated_at = now()
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, name, type, lender, principal_decimal, outstanding_balance, interest_rate, min_payment, due_date, payment_frequency, is_overdue, late_fees, other_charges, debt_taken, debt_health_score, priority, notes, created_at, updated_at, accrued_interest, last_accrual_date, payment_due_day, moratorium_until, in_moratorium, instrument_type, interest_model, monthly_obligation, minimum_obligation, remaining_months, due_day, is_secured, is_revolving, is_short_term, is_interest_bearing, fragmentation_weight, stress_priority, treatment_classification, engine_version, policy_version, extra_metadata
+`
+
+type UpdateDebtDetailsParams struct {
+	ID                 uuid.UUID
+	UserID             uuid.UUID
+	Name               string
+	Lender             sql.NullString
+	PrincipalDecimal   decimal.Decimal
+	OutstandingBalance decimal.Decimal
+	InterestRate       decimal.Decimal
+	MinPayment         decimal.Decimal
+	DueDate            time.Time
+	Notes              sql.NullString
+	PaymentDueDay      sql.NullInt32
+	MonthlyObligation  decimal.Decimal
+	MinimumObligation  decimal.Decimal
+	RemainingMonths    sql.NullInt32
+	DueDay             sql.NullInt32
+	IsInterestBearing  bool
+}
+
+func (q *Queries) UpdateDebtDetails(ctx context.Context, arg UpdateDebtDetailsParams) (Debt, error) {
+	row := q.db.QueryRowContext(ctx, updateDebtDetails,
+		arg.ID,
+		arg.UserID,
+		arg.Name,
+		arg.Lender,
+		arg.PrincipalDecimal,
+		arg.OutstandingBalance,
+		arg.InterestRate,
+		arg.MinPayment,
+		arg.DueDate,
+		arg.Notes,
+		arg.PaymentDueDay,
+		arg.MonthlyObligation,
+		arg.MinimumObligation,
+		arg.RemainingMonths,
+		arg.DueDay,
+		arg.IsInterestBearing,
+	)
+	var i Debt
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Type,
+		&i.Lender,
+		&i.PrincipalDecimal,
+		&i.OutstandingBalance,
+		&i.InterestRate,
+		&i.MinPayment,
+		&i.DueDate,
+		&i.PaymentFrequency,
+		&i.IsOverdue,
+		&i.LateFees,
+		&i.OtherCharges,
+		&i.DebtTaken,
+		&i.DebtHealthScore,
+		&i.Priority,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AccruedInterest,
+		&i.LastAccrualDate,
+		&i.PaymentDueDay,
+		&i.MoratoriumUntil,
+		&i.InMoratorium,
+		&i.InstrumentType,
+		&i.InterestModel,
+		&i.MonthlyObligation,
+		&i.MinimumObligation,
+		&i.RemainingMonths,
+		&i.DueDay,
+		&i.IsSecured,
+		&i.IsRevolving,
+		&i.IsShortTerm,
+		&i.IsInterestBearing,
+		&i.FragmentationWeight,
+		&i.StressPriority,
+		&i.TreatmentClassification,
+		&i.EngineVersion,
+		&i.PolicyVersion,
+		&i.ExtraMetadata,
+	)
+	return i, err
+}
+
 const updateDebtHealthScore = `-- name: UpdateDebtHealthScore :exec
 UPDATE debts
 SET debt_health_score = $2, updated_at = now()

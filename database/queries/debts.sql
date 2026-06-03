@@ -28,6 +28,26 @@ SELECT *
 FROM debts
 WHERE id = $1 AND user_id = $2;
 
+-- name: UpdateDebtDetails :one
+UPDATE debts
+SET name = $3,
+    lender = $4,
+    principal_decimal = $5,
+    outstanding_balance = $6,
+    interest_rate = $7,
+    min_payment = $8,
+    due_date = $9,
+    notes = $10,
+    payment_due_day = $11,
+    monthly_obligation = $12,
+    minimum_obligation = $13,
+    remaining_months = $14,
+    due_day = $15,
+    is_interest_bearing = $16,
+    updated_at = now()
+WHERE id = $1 AND user_id = $2
+RETURNING *;
+
 -- name: UpdateDebtBalance :exec
 UPDATE debts
 SET outstanding_balance = $2,

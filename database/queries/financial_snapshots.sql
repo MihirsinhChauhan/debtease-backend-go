@@ -79,3 +79,10 @@ FROM financial_snapshots
 WHERE user_id = $1
 ORDER BY created_at DESC
 LIMIT $2;
+
+-- name: ListFinancialSnapshotsBySession :many
+SELECT *
+FROM financial_snapshots
+WHERE session_id = $1
+ORDER BY created_at DESC
+LIMIT $2;

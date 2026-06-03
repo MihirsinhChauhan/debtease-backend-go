@@ -9,21 +9,37 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
-// FinanceStep is the row type for finance_steps table (used by finance_steps queries).
-type FinanceStep struct {
-	SessionID         uuid.UUID
-	MonthlyIncome    decimal.NullDecimal
-	FixedObligations decimal.NullDecimal
-	Loans             json.RawMessage
-	EngineVersion    sql.NullString
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+const deleteFinanceStepsBySessionID = `-- name: DeleteFinanceStepsBySessionID :exec
+DELETE FROM finance_steps WHERE session_id = $1
+`
+
+func (q *Queries) DeleteFinanceStepsBySessionID(ctx context.Context, sessionID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteFinanceStepsBySessionID, sessionID)
+	return err
+}
+
+const getFinanceStepsBySessionID = `-- name: GetFinanceStepsBySessionID :one
+SELECT session_id, monthly_income, fixed_obligations, loans, engine_version, created_at, updated_at FROM finance_steps WHERE session_id = $1
+`
+
+func (q *Queries) GetFinanceStepsBySessionID(ctx context.Context, sessionID uuid.UUID) (FinanceStep, error) {
+	row := q.db.QueryRowContext(ctx, getFinanceStepsBySessionID, sessionID)
+	var i FinanceStep
+	err := row.Scan(
+		&i.SessionID,
+		&i.MonthlyIncome,
+		&i.FixedObligations,
+		&i.Loans,
+		&i.EngineVersion,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const upsertFinanceSteps = `-- name: UpsertFinanceSteps :one
@@ -39,10 +55,10 @@ RETURNING session_id, monthly_income, fixed_obligations, loans, engine_version, 
 `
 
 type UpsertFinanceStepsParams struct {
-	SessionID         uuid.UUID
+	SessionID        uuid.UUID
 	MonthlyIncome    decimal.NullDecimal
 	FixedObligations decimal.NullDecimal
-	Loans             json.RawMessage
+	Loans            json.RawMessage
 	EngineVersion    sql.NullString
 }
 
@@ -65,32 +81,4 @@ func (q *Queries) UpsertFinanceSteps(ctx context.Context, arg UpsertFinanceSteps
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const getFinanceStepsBySessionID = `-- name: GetFinanceStepsBySessionID :one
-SELECT session_id, monthly_income, fixed_obligations, loans, engine_version, created_at, updated_at FROM finance_steps WHERE session_id = $1
-`
-
-func (q *Queries) GetFinanceStepsBySessionID(ctx context.Context, sessionID uuid.UUID) (FinanceStep, error) {
-	row := q.db.QueryRowContext(ctx, getFinanceStepsBySessionID, sessionID)
-	var i FinanceStep
-	err := row.Scan(
-		&i.SessionID,
-		&i.MonthlyIncome,
-		&i.FixedObligations,
-		&i.Loans,
-		&i.EngineVersion,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const deleteFinanceStepsBySessionID = `-- name: DeleteFinanceStepsBySessionID :exec
-DELETE FROM finance_steps WHERE session_id = $1
-`
-
-func (q *Queries) DeleteFinanceStepsBySessionID(ctx context.Context, sessionID uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, deleteFinanceStepsBySessionID, sessionID)
-	return err
 }

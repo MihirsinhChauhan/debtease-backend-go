@@ -43,6 +43,22 @@ type UpdateDebtHealthRequest struct {
 	DebtHealthScore *decimal.Decimal `json:"debt_health_score" validate:"required"`
 }
 
+type UpdateDebtRequest struct {
+	Name               *string          `json:"name,omitempty"`
+	Lender             *string          `json:"lender,omitempty"`
+	Principal          *decimal.Decimal `json:"principal,omitempty"`
+	OutstandingBalance *decimal.Decimal `json:"outstanding_balance,omitempty"`
+	InterestRate       *decimal.Decimal `json:"interest_rate,omitempty"`
+	MinPayment         *decimal.Decimal `json:"min_payment,omitempty"`
+	DueDate            *time.Time       `json:"due_date,omitempty"`
+	Notes              *string          `json:"notes,omitempty"`
+	PaymentDueDay      *int32           `json:"payment_due_day,omitempty"`
+	EMIAmount          *decimal.Decimal `json:"emi_amount,omitempty"`
+	TenureMonths       *int32           `json:"tenure_months,omitempty"`
+	BillingDay         *int32           `json:"billing_day,omitempty"`
+	GracePeriodDays    *int32           `json:"grace_period_days,omitempty"`
+}
+
 type DebtResponse struct {
 	ID                 string           `json:"id"`
 	UserID             string           `json:"user_id"`

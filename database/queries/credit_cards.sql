@@ -11,6 +11,14 @@ RETURNING *;
 SELECT * FROM credit_cards
 WHERE debt_id = $1;
 
+-- name: UpdateCreditCardDetails :exec
+UPDATE credit_cards
+SET billing_day = $2,
+    grace_period_days = $3,
+    minimum_due = $4,
+    updated_at = now()
+WHERE debt_id = $1;
+
 -- name: UpdateCreditCardBalances :exec
 UPDATE credit_cards
 SET billed_balance = $2,

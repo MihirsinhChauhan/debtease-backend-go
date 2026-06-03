@@ -20,6 +20,9 @@ type DashboardResponse struct {
 	// OnboardingHealth is recomputed from the latest financial_snapshots row (health_v1), when present.
 	OnboardingHealth *OnboardingHealthSnapshot `json:"onboarding_health,omitempty"`
 
+	// IncomeStressPreview shows health status at current income and under −10% / −20% shocks (health_v1).
+	IncomeStressPreview *IncomeStressPreview `json:"income_stress_preview,omitempty"`
+
 	// FinancialSnapshotForSimulation matches POST /api/v1/snapshot/simulate-loan "snapshot" body (when user has a linked snapshot).
 	FinancialSnapshotForSimulation *FinancialSnapshotForSimulation `json:"financial_snapshot_for_simulation,omitempty"`
 
@@ -50,6 +53,14 @@ type FinancialSnapshotForSimulation struct {
 	InvestmentsValue  *decimal.Decimal `json:"investments_value,omitempty"`
 	ActiveDebtCount   int              `json:"active_debt_count"`
 	UnsecuredEmiRatio *decimal.Decimal `json:"unsecured_emi_ratio,omitempty"`
+}
+
+// IncomeStressPreview is health status under income shocks for dashboard resilience card.
+type IncomeStressPreview struct {
+	CurrentStatus string `json:"current_status"`
+	Shock10Status string `json:"shock_10_status"`
+	Shock20Status string `json:"shock_20_status"`
+	PrimaryReason string `json:"primary_reason"`
 }
 
 // OnboardingHealthSnapshot is aggregate onboarding debt health (distinct from portfolio-weighted DebtHealth).

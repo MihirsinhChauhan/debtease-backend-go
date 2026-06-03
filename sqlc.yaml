@@ -50,3 +50,11 @@ sql:
             go_type: "github.com/shopspring/decimal.Decimal"
           - column: "financial_snapshots.total_debt_balance"
             go_type: "github.com/shopspring/decimal.Decimal"
+          - column: "finance_steps.monthly_income"
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
+          - column: "finance_steps.fixed_obligations"
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
