@@ -3,6 +3,7 @@ package main
 import (
 	"DebtEase/internal/api"
 	"DebtEase/internal/database"
+	"DebtEase/internal/dbconn"
 
 	// "DebtEase/internal/events"
 	"DebtEase/internal/handlers"
@@ -15,7 +16,6 @@ import (
 
 	// "DebtEase/internal/worker"
 	// "context"
-	"database/sql"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,7 +25,6 @@ import (
 	// "time"
 
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -46,8 +45,8 @@ func main() {
 
 	platform := os.Getenv("PLATFORM")
 
-	// Open DB
-	db, err := sql.Open("postgres", dbURL)
+	// Open DB (pgx + simple protocol for compatibility with transaction poolers)
+	db, err := dbconn.Open(dbURL)
 	if err != nil {
 		logger.Logger.Fatalw("Failed to open database", "error", err)
 	}
