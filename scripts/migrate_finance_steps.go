@@ -3,11 +3,10 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"os"
 
-	_ "github.com/lib/pq"
+	"DebtEase/internal/dbconn"
 )
 
 const migration = `
@@ -33,7 +32,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "DB_URL is required")
 		os.Exit(1)
 	}
-	db, err := sql.Open("postgres", dbURL)
+	db, err := dbconn.Open(dbURL)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "open:", err)
 		os.Exit(1)
