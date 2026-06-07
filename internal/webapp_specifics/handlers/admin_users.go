@@ -9,17 +9,47 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+func adminUserRowToSearchResult(id uuid.UUID, email, firstName, lastName string, createdAt time.Time) webapp_models.AdminUserSearchResult {
+	uid := id.String()
+	ca := createdAt.UTC().Format("2006-01-02T15:04:05Z07:00")
+	return webapp_models.AdminUserSearchResult{
+		UserID:    &uid,
+		Email:     &email,
+		FirstName: &firstName,
+		LastName:  &lastName,
+		CreatedAt: &ca,
+	}
+}
 
 func HandleAdminUserSearch(cfg *api.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		q := strings.TrimSpace(r.URL.Query().Get("q"))
 		if q == "" {
-			utils.RespondWithJSON(w, http.StatusOK, webapp_models.AdminUserSearchResponse{Results: []webapp_models.AdminUserSearchResult{}})
+			limit := int32(50)
+			if l := r.URL.Query().Get("limit"); l != "" {
+				if parsed, err := strconv.ParseInt(l, 10, 32); err == nil && parsed > 0 && parsed <= 100 {
+					limit = int32(parsed)
+				}
+			}
+			users, err := cfg.DB.ListRecentUsers(ctx, limit)
+			if err != nil {
+				logger.Logger.Errorw("ListRecentUsers failed", "error", err)
+				utils.RespondWithError(w, http.StatusInternalServerError, "Failed to load users")
+				return
+			}
+			results := make([]webapp_models.AdminUserSearchResult, 0, len(users))
+			for _, u := range users {
+				results = append(results, adminUserRowToSearchResult(u.ID, u.Email, u.FirstName, u.LastName, u.CreatedAt))
+			}
+			utils.RespondWithJSON(w, http.StatusOK, webapp_models.AdminUserSearchResponse{Results: results})
 			return
 		}
 
