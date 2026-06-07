@@ -41,6 +41,50 @@ func (q *Queries) GetUserByIDAdmin(ctx context.Context, id uuid.UUID) (GetUserBy
 	return i, err
 }
 
+const listRecentUsers = `-- name: ListRecentUsers :many
+SELECT id, email, first_name, last_name, created_at
+FROM users
+ORDER BY created_at DESC
+LIMIT $1
+`
+
+type ListRecentUsersRow struct {
+	ID        uuid.UUID
+	Email     string
+	FirstName string
+	LastName  string
+	CreatedAt time.Time
+}
+
+func (q *Queries) ListRecentUsers(ctx context.Context, limit int32) ([]ListRecentUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentUsers, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentUsersRow
+	for rows.Next() {
+		var i ListRecentUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchUsersByEmail = `-- name: SearchUsersByEmail :many
 SELECT id, email, first_name, last_name, created_at
 FROM users
