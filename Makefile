@@ -13,8 +13,9 @@ migrate-finance-steps:
 	go run scripts/migrate_finance_steps.go
 
 # Run all migrations with goose (install: go install github.com/pressly/goose/v3/cmd/goose@latest)
+# Requires GOOSE_DRIVER and GOOSE_DBSTRING in .env (see .env.example).
 migrate:
-	goose -dir database/schema postgres "$(DB_URL)" up
+	./scripts/migrate.sh
 
 # Run integration tests (require DB_URL and migrated DB)
 test-integration:

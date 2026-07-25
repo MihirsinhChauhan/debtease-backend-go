@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"DebtEase/internal/database"
+	"DebtEase/internal/storage"
 )
 
 type Config struct {
@@ -23,4 +24,6 @@ type Config struct {
 
 	// AdminEmails is a comma-separated allowlist from ADMIN_EMAILS (lowercase compare at runtime).
 	AdminEmails []string
+
+	StatementStorage storage.StatementStorage
 }

@@ -33,6 +33,38 @@ sql:
             go_type: github.com/shopspring/decimal.Decimal
           - column: credit_cards.minimum_due
             go_type: github.com/shopspring/decimal.Decimal
+          - column: credit_cards.credit_limit
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
+          - column: credit_card_statements.statement_amount
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
+          - column: credit_card_statements.minimum_due
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
+          - column: credit_card_statements.previous_balance
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
+          - column: credit_card_statements.payments_received
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
+          - column: credit_card_statements.new_balance
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
+          - column: credit_card_statements.credit_limit
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
+          - column: credit_card_statements.available_credit
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "NullDecimal"
           # financial_snapshots: nullable aggregates as decimal (avoid sql.NullString)
           - column: "financial_snapshots.monthly_income"
             go_type: "github.com/shopspring/decimal.Decimal"

@@ -59,7 +59,7 @@ INSERT INTO credit_cards (
 ) VALUES (
 	$1, $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING debt_id, billing_day, grace_period_days, min_payment_percent, last_statement_date, payment_due_date, billed_balance, unbilled_balance, in_grace_period, created_at, updated_at, minimum_due
+RETURNING debt_id, billing_day, grace_period_days, min_payment_percent, last_statement_date, payment_due_date, billed_balance, unbilled_balance, in_grace_period, created_at, updated_at, minimum_due, last4, credit_limit, issuer
 `
 
 type CreateCreditCardParams struct {
@@ -98,6 +98,9 @@ func (q *Queries) CreateCreditCard(ctx context.Context, arg CreateCreditCardPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.MinimumDue,
+		&i.Last4,
+		&i.CreditLimit,
+		&i.Issuer,
 	)
 	return i, err
 }
@@ -125,7 +128,7 @@ func (q *Queries) GenerateStatement(ctx context.Context, arg GenerateStatementPa
 }
 
 const getCreditCardByDebtID = `-- name: GetCreditCardByDebtID :one
-SELECT debt_id, billing_day, grace_period_days, min_payment_percent, last_statement_date, payment_due_date, billed_balance, unbilled_balance, in_grace_period, created_at, updated_at, minimum_due FROM credit_cards
+SELECT debt_id, billing_day, grace_period_days, min_payment_percent, last_statement_date, payment_due_date, billed_balance, unbilled_balance, in_grace_period, created_at, updated_at, minimum_due, last4, credit_limit, issuer FROM credit_cards
 WHERE debt_id = $1
 `
 
@@ -145,6 +148,9 @@ func (q *Queries) GetCreditCardByDebtID(ctx context.Context, debtID uuid.UUID) (
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.MinimumDue,
+		&i.Last4,
+		&i.CreditLimit,
+		&i.Issuer,
 	)
 	return i, err
 }
@@ -331,6 +337,41 @@ func (q *Queries) UpdateCreditCardDetails(ctx context.Context, arg UpdateCreditC
 		arg.BillingDay,
 		arg.GracePeriodDays,
 		arg.MinimumDue,
+	)
+	return err
+}
+
+const updateCreditCardFromStatement = `-- name: UpdateCreditCardFromStatement :exec
+UPDATE credit_cards
+SET minimum_due = $2,
+    last_statement_date = $3,
+    payment_due_date = $4,
+    last4 = COALESCE($5, last4),
+    credit_limit = COALESCE($6, credit_limit),
+    issuer = COALESCE($7, issuer),
+    updated_at = now()
+WHERE debt_id = $1
+`
+
+type UpdateCreditCardFromStatementParams struct {
+	DebtID            uuid.UUID
+	MinimumDue        decimal.Decimal
+	LastStatementDate sql.NullTime
+	PaymentDueDate    sql.NullTime
+	Last4             sql.NullString
+	CreditLimit       decimal.NullDecimal
+	Issuer            sql.NullString
+}
+
+func (q *Queries) UpdateCreditCardFromStatement(ctx context.Context, arg UpdateCreditCardFromStatementParams) error {
+	_, err := q.db.ExecContext(ctx, updateCreditCardFromStatement,
+		arg.DebtID,
+		arg.MinimumDue,
+		arg.LastStatementDate,
+		arg.PaymentDueDate,
+		arg.Last4,
+		arg.CreditLimit,
+		arg.Issuer,
 	)
 	return err
 }

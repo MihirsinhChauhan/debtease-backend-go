@@ -115,4 +115,7 @@ type CreditCardResponse struct {
 	UnbilledBalance   decimal.Decimal  `json:"unbilled_balance"`
 	InGracePeriod     bool             `json:"in_grace_period"`
 	MinimumDue        *decimal.Decimal `json:"minimum_due,omitempty"`
+	Last4             *string          `json:"last4,omitempty"`
+	CreditLimit       *decimal.Decimal `json:"credit_limit,omitempty"`
+	Issuer            *string          `json:"issuer,omitempty"`
 }

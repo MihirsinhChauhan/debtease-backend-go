@@ -305,6 +305,152 @@ type CreditCard struct {
 	CreatedAt         sql.NullTime
 	UpdatedAt         sql.NullTime
 	MinimumDue        decimal.Decimal
+	Last4             sql.NullString
+	CreditLimit       decimal.NullDecimal
+	Issuer            sql.NullString
+}
+
+type StatementUploadStatus string
+
+const (
+	StatementUploadStatusUploaded StatementUploadStatus = "uploaded"
+	StatementUploadStatusParsing  StatementUploadStatus = "parsing"
+	StatementUploadStatusParsed   StatementUploadStatus = "parsed"
+	StatementUploadStatusFailed   StatementUploadStatus = "failed"
+)
+
+func (e *StatementUploadStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = StatementUploadStatus(s)
+	case string:
+		*e = StatementUploadStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for StatementUploadStatus: %T", src)
+	}
+	return nil
+}
+
+type NullStatementUploadStatus struct {
+	StatementUploadStatus StatementUploadStatus
+	Valid                 bool
+}
+
+func (ns *NullStatementUploadStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.StatementUploadStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.StatementUploadStatus.Scan(value)
+}
+
+func (ns NullStatementUploadStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.StatementUploadStatus), nil
+}
+
+type StatementFailureCode string
+
+const (
+	StatementFailureCodePasswordRequired StatementFailureCode = "password_required"
+	StatementFailureCodePasswordInvalid  StatementFailureCode = "password_invalid"
+	StatementFailureCodeIssuerUnknown      StatementFailureCode = "issuer_unknown"
+	StatementFailureCodeParseIncomplete    StatementFailureCode = "parse_incomplete"
+	StatementFailureCodeInvalidFile        StatementFailureCode = "invalid_file"
+	StatementFailureCodeInternalError      StatementFailureCode = "internal_error"
+)
+
+func (e *StatementFailureCode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = StatementFailureCode(s)
+	case string:
+		*e = StatementFailureCode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for StatementFailureCode: %T", src)
+	}
+	return nil
+}
+
+type NullStatementFailureCode struct {
+	StatementFailureCode StatementFailureCode
+	Valid                bool
+}
+
+func (ns *NullStatementFailureCode) Scan(value interface{}) error {
+	if value == nil {
+		ns.StatementFailureCode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.StatementFailureCode.Scan(value)
+}
+
+func (ns NullStatementFailureCode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.StatementFailureCode), nil
+}
+
+type StatementSource string
+
+const (
+	StatementSourceMANUALPDF StatementSource = "MANUAL_PDF"
+	StatementSourceGMAIL   StatementSource = "GMAIL"
+	StatementSourceSMS     StatementSource = "SMS"
+	StatementSourceAPI     StatementSource = "API"
+)
+
+func (e *StatementSource) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = StatementSource(s)
+	case string:
+		*e = StatementSource(s)
+	default:
+		return fmt.Errorf("unsupported scan type for StatementSource: %T", src)
+	}
+	return nil
+}
+
+type StatementUpload struct {
+	ID               uuid.UUID
+	DebtID           uuid.UUID
+	StatementID      uuid.NullUUID
+	StoragePath      string
+	OriginalFilename string
+	Checksum         string
+	Mime             string
+	Status           StatementUploadStatus
+	FailureCode      NullStatementFailureCode
+	ErrorMessage     sql.NullString
+	UploadedAt       time.Time
+}
+
+type CreditCardStatement struct {
+	ID               uuid.UUID
+	DebtID           uuid.UUID
+	StatementStart   sql.NullTime
+	StatementEnd     sql.NullTime
+	StatementDate    sql.NullTime
+	DueDate          sql.NullTime
+	StatementAmount  decimal.NullDecimal
+	MinimumDue       decimal.NullDecimal
+	PreviousBalance  decimal.NullDecimal
+	PaymentsReceived decimal.NullDecimal
+	NewBalance       decimal.NullDecimal
+	CreditLimit      decimal.NullDecimal
+	AvailableCredit  decimal.NullDecimal
+	Source           StatementSource
+	UploadID         uuid.UUID
+	IssuerDetected   sql.NullString
+	ParserVariant    sql.NullString
+	Metadata         json.RawMessage
+	CreatedAt        time.Time
 }
 
 type Debt struct {

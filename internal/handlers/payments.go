@@ -137,7 +137,7 @@ func HandleRecordPayment(cfg *api.Config, db *sql.DB) http.HandlerFunc {
 
 		utils.RespondWithJSON(w, http.StatusCreated, map[string]interface{}{
 			"payment": resp,
-			"debt":    toDebtResponse(updated),
+			"debt":    toDebtResponse(ctx, q, updated),
 		})
 	}
 }

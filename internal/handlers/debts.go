@@ -230,7 +230,7 @@ func HandleCreateDebt(cfg *api.Config) http.HandlerFunc {
 			return
 		}
 
-		utils.RespondWithJSON(w, http.StatusCreated, toDebtResponse(debt))
+		utils.RespondWithJSON(w, http.StatusCreated, toDebtResponse(ctx, cfg.DB, debt))
 	}
 }
 
@@ -251,7 +251,7 @@ func HandleListDebts(cfg *api.Config) http.HandlerFunc {
 		}
 		resp := make([]models.DebtResponse, 0, len(items))
 		for _, d := range items {
-			resp = append(resp, toDebtResponse(d))
+			resp = append(resp, toDebtResponse(ctx, cfg.DB, d))
 		}
 		utils.RespondWithJSON(w, http.StatusOK, resp)
 	}
@@ -283,7 +283,7 @@ func HandleGetDebt(cfg *api.Config) http.HandlerFunc {
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to fetch debt")
 			return
 		}
-		utils.RespondWithJSON(w, http.StatusOK, toDebtResponse(debt))
+		utils.RespondWithJSON(w, http.StatusOK, toDebtResponse(ctx, cfg.DB, debt))
 	}
 }
 
@@ -619,7 +619,7 @@ func HandleUpdateDebt(cfg *api.Config) http.HandlerFunc {
 			return
 		}
 
-		utils.RespondWithJSON(w, http.StatusOK, toDebtResponse(updated))
+		utils.RespondWithJSON(w, http.StatusOK, toDebtResponse(ctx, cfg.DB, updated))
 	}
 }
 
@@ -671,7 +671,7 @@ func HandleMarkDebtOverdue(cfg *api.Config) http.HandlerFunc {
 // 	}
 // }
 
-func toDebtResponse(d database.Debt) models.DebtResponse {
+func toDebtResponse(ctx context.Context, q *database.Queries, d database.Debt) models.DebtResponse {
 	var lender *string
 	if d.Lender.Valid {
 		lender = &d.Lender.String
@@ -802,5 +802,6 @@ func toDebtResponse(d database.Debt) models.DebtResponse {
 		PaymentDueDay:   paymentDueDay,
 		MoratoriumUntil: moratoriumUntil,
 		InMoratorium:    inMoratorium,
+		CreditCard:      loadCreditCardResponse(ctx, q, d),
 	}
 }

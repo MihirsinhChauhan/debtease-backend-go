@@ -9,6 +9,7 @@ import (
 	"DebtEase/internal/handlers"
 	"DebtEase/internal/logger"
 	"DebtEase/internal/middleware"
+	"DebtEase/internal/storage"
 
 	// "DebtEase/internal/notifications"
 	"DebtEase/internal/pubsub"
@@ -26,6 +27,15 @@ import (
 
 	"github.com/joho/godotenv"
 )
+
+func initStatementStorage(cfg *api.Config) {
+	path := os.Getenv("STATEMENT_STORAGE_PATH")
+	store, err := storage.NewLocalStatementStorage(path)
+	if err != nil {
+		logger.Logger.Fatalw("Failed to init statement storage", "error", err)
+	}
+	cfg.StatementStorage = store
+}
 
 func main() {
 	// Load .env
@@ -113,6 +123,7 @@ func main() {
 		AdminEmails:                adminEmails,
 		// RabbitMQURL: rabbitmqURL,
 	}
+	initStatementStorage(cfg)
 
 	// Setup router
 	mux := http.NewServeMux()
@@ -216,6 +227,17 @@ func main() {
 		mux.Handle("POST /api/debts/{id}/payments", middleware.Logging(middleware.AuthRequired(cfg, recordPayment)))
 		listPayments := handlers.HandleListPayments(cfg)
 		mux.Handle("GET /api/debts/{id}/payments", middleware.Logging(middleware.AuthRequired(cfg, listPayments)))
+
+		uploadStatement := handlers.HandleUploadStatement(cfg)
+		mux.Handle("POST /api/debts/{id}/statements", middleware.Logging(middleware.AuthRequired(cfg, uploadStatement)))
+		listStatements := handlers.HandleListStatements(cfg)
+		mux.Handle("GET /api/debts/{id}/statements", middleware.Logging(middleware.AuthRequired(cfg, listStatements)))
+		getStatement := handlers.HandleGetStatement(cfg)
+		mux.Handle("GET /api/statements/{id}", middleware.Logging(middleware.AuthRequired(cfg, getStatement)))
+		retryParse := handlers.HandleRetryStatementParse(cfg)
+		mux.Handle("POST /api/statement-uploads/{id}/parse", middleware.Logging(middleware.AuthRequired(cfg, retryParse)))
+		downloadPDF := handlers.HandleDownloadStatementPDF(cfg)
+		mux.Handle("GET /api/statement-uploads/{id}/download", middleware.Logging(middleware.AuthRequired(cfg, downloadPDF)))
 
 		// // DELETE /api/debts/{id}
 		// deleteDebt := handlers.HandleDeleteDebt(cfg)

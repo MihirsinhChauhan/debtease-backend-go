@@ -67,3 +67,14 @@ JOIN debts d ON cc.debt_id = d.id
 WHERE cc.in_grace_period = FALSE
 	AND d.outstanding_balance > 0;
 
+-- name: UpdateCreditCardFromStatement :exec
+UPDATE credit_cards
+SET minimum_due = $2,
+    last_statement_date = $3,
+    payment_due_date = $4,
+    last4 = COALESCE($5, last4),
+    credit_limit = COALESCE($6, credit_limit),
+    issuer = COALESCE($7, issuer),
+    updated_at = now()
+WHERE debt_id = $1;
+
