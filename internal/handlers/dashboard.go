@@ -67,7 +67,6 @@ func HandleGetDashboard(cfg *api.Config) http.HandlerFunc {
 		// Convert interface{} to decimal.Decimal for monetary values
 		response.TotalOutstanding = convertToDecimal(summary.TotalOutstanding)
 		response.RepaymentProgress.TotalPrincipal = convertToDecimal(summary.TotalPrincipal)
-		response.RepaymentProgress.TotalPaid = convertToDecimal(summary.TotalPaid)
 		response.MonthlyMinimumPayment = convertToDecimal(summary.TotalMinimumPayment)
 
 		// Convert percentages (int32) to decimal.Decimal
@@ -136,6 +135,13 @@ func HandleGetDashboard(cfg *api.Config) http.HandlerFunc {
 		response.PaymentHistory.PaidLast90Days = convertToDecimal(paymentHistory.PaidLast90Days)
 		response.PaymentHistory.PaidLastYear = convertToDecimal(paymentHistory.PaidLastYear)
 		response.PaymentHistory.PaymentsLast30Days = paymentHistory.PaymentsLast30Days
+
+		totalPaid, totalPaidErr := cfg.DB.GetTotalPaidByUser(ctx, userID)
+		if totalPaidErr != nil {
+			logger.Logger.Warnw("GetTotalPaidByUser failed for dashboard", "error", totalPaidErr, "userID", userID)
+		} else {
+			response.RepaymentProgress.TotalPaid = convertToDecimal(totalPaid)
+		}
 
 		rollup, rollupErr := cfg.DB.GetPortfolioRollupForUser(ctx, userID)
 		if rollupErr != nil {

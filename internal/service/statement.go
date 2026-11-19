@@ -262,6 +262,21 @@ func (s *StatementService) syncCreditCardFromParse(ctx context.Context, debtID u
 		return err
 	}
 
+	var principalUpdate decimal.Decimal
+	if n.CreditLimit != nil && n.CreditLimit.IsPositive() {
+		principalUpdate = *n.CreditLimit
+	}
+	if minDue.IsPositive() || principalUpdate.IsPositive() || due.Valid {
+		if err := s.db.UpdateDebtFromStatementParse(ctx, database.UpdateDebtFromStatementParseParams{
+			ID:               debtID,
+			MinPayment:       minDue,
+			PrincipalDecimal: principalUpdate,
+			DueDate:          due,
+		}); err != nil {
+			return err
+		}
+	}
+
 	balance := n.NewBalance
 	if balance == nil {
 		balance = n.StatementAmount

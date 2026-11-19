@@ -70,3 +70,9 @@ SELECT
 FROM payments_history p
 JOIN debts d ON p.debt_id = d.id
 WHERE d.user_id = $1;
+
+-- name: GetTotalPaidByUser :one
+SELECT COALESCE(SUM(p.amount), 0)::numeric AS total_paid
+FROM payments_history p
+JOIN debts d ON p.debt_id = d.id
+WHERE d.user_id = $1;

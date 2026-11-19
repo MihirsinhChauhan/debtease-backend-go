@@ -22,10 +22,14 @@ import (
 
 var snapshotLoanTypes = map[string]bool{
 	"personal_loan": true,
-	"car_loan":      true,
 	"home_loan":     true,
+	"car_loan":      true,
+	"student_loan":  true,
+	"gold_loan":     true,
 	"consumer_emi":  true,
 	"bnpl":          true,
+	"medical":       true,
+	"other":         true,
 }
 
 func healthBlockFromResult(in health_v1.HealthScoreInput, result health_v1.HealthScoreResult) webapp_models.SnapshotHealthBlock {
@@ -60,7 +64,7 @@ func HandleSnapshotSimulateLoan(cfg *api.Config) http.HandlerFunc {
 
 		lt := strings.TrimSpace(req.LoanType)
 		if lt == "" || !snapshotLoanTypes[lt] {
-			utils.RespondWithError(w, http.StatusBadRequest, "loan_type must be personal_loan, car_loan, home_loan, consumer_emi, or bnpl")
+			utils.RespondWithError(w, http.StatusBadRequest, "loan_type must be a supported loan type (personal, home, car, education, gold, consumer EMI, BNPL, medical, or other)")
 			return
 		}
 

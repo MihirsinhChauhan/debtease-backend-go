@@ -100,7 +100,7 @@ func HealthInputFromInlineSnapshot(
 // LoanTypeSecured returns true for car and home loans (secured collateral).
 func LoanTypeSecured(loanType string) bool {
 	switch loanType {
-	case "car_loan", "home_loan":
+	case "car_loan", "home_loan", "gold_loan":
 		return true
 	default:
 		return false

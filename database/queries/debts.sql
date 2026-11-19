@@ -55,6 +55,16 @@ SET outstanding_balance = $2,
     updated_at = now()
 WHERE id = $1;
 
+-- name: UpdateDebtFromStatementParse :exec
+UPDATE debts
+SET
+    min_payment = CASE WHEN sqlc.arg('min_payment') > 0 THEN sqlc.arg('min_payment') ELSE min_payment END,
+    minimum_obligation = CASE WHEN sqlc.arg('min_payment') > 0 THEN sqlc.arg('min_payment') ELSE minimum_obligation END,
+    principal_decimal = CASE WHEN sqlc.arg('principal_decimal') > 0 THEN sqlc.arg('principal_decimal') ELSE principal_decimal END,
+    due_date = COALESCE(sqlc.narg('due_date'), due_date),
+    updated_at = now()
+WHERE id = sqlc.arg('id');
+
 -- name: UpdateDebtHealthScore :exec
 UPDATE debts
 SET debt_health_score = $2, updated_at = now()

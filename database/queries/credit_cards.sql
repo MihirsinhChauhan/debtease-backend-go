@@ -69,12 +69,12 @@ WHERE cc.in_grace_period = FALSE
 
 -- name: UpdateCreditCardFromStatement :exec
 UPDATE credit_cards
-SET minimum_due = $2,
-    last_statement_date = $3,
-    payment_due_date = $4,
-    last4 = COALESCE($5, last4),
-    credit_limit = COALESCE($6, credit_limit),
-    issuer = COALESCE($7, issuer),
+SET minimum_due = CASE WHEN sqlc.arg('minimum_due') > 0 THEN sqlc.arg('minimum_due') ELSE minimum_due END,
+    last_statement_date = COALESCE(sqlc.narg('last_statement_date'), last_statement_date),
+    payment_due_date = COALESCE(sqlc.narg('payment_due_date'), payment_due_date),
+    last4 = COALESCE(sqlc.narg('last4'), last4),
+    credit_limit = COALESCE(sqlc.narg('credit_limit'), credit_limit),
+    issuer = COALESCE(sqlc.narg('issuer'), issuer),
     updated_at = now()
-WHERE debt_id = $1;
+WHERE debt_id = sqlc.arg('debt_id');
 
